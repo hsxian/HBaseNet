@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Google.Protobuf" Version="3.12.1" />
+      <PackageReference Include="Google.Protobuf.Tools" Version="3.12.1" />
+      <PackageReference Include="Grpc" Version="2.29.0" />
+      <PackageReference Include="Grpc.Tools" Version="2.29.0">
+        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        <PrivateAssets>all</PrivateAssets>
+      </PackageReference>
+      <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="3.1.4" />
+      <PackageReference Include="ZooKeeperNetEx" Version="3.4.12.4" />
+    </ItemGroup>
+    <ItemGroup>
+        <Protobuf Include="..\..\Protos\Cell.proto" GrpcServices="Client" Link="Protos\Cell.proto" />
+        <Protobuf Include="..\..\Protos\Client.proto" GrpcServices="Client" Link="Protos\Client.proto" />
+        <Protobuf Include="..\..\Protos\ClusterId.proto" GrpcServices="Client" Link="Protos\ClusterId.proto" />
+        <Protobuf Include="..\..\Protos\ClusterStatus.proto" GrpcServices="Client" Link="Protos\ClusterStatus.proto" />
+        <Protobuf Include="..\..\Protos\Comparator.proto" GrpcServices="Client" Link="Protos\Comparator.proto" />
+        <Protobuf Include="..\..\Protos\ErrorHandling.proto" GrpcServices="Client" Link="Protos\ErrorHandling.proto" />
+        <Protobuf Include="..\..\Protos\Filter.proto" GrpcServices="Client" Link="Protos\Filter.proto" />
+        <Protobuf Include="..\..\Protos\FS.proto" GrpcServices="Client" Link="Protos\FS.proto" />
+        <Protobuf Include="..\..\Protos\HBase.proto" GrpcServices="Client" Link="Protos\HBase.proto" />
+        <Protobuf Include="..\..\Protos\Master.proto" GrpcServices="Client" Link="Protos\Master.proto" />
+        <Protobuf Include="..\..\Protos\Procedure.proto" GrpcServices="Client" Link="Protos\Procedure.proto" />
+        <Protobuf Include="..\..\Protos\Quota.proto" GrpcServices="Client" Link="Protos\Quota.proto" />
+        <Protobuf Include="..\..\Protos\RPC.proto" GrpcServices="Client" Link="Protos\RPC.proto" />
+        <Protobuf Include="..\..\Protos\Tracing.proto" GrpcServices="Client" Link="Protos\Tracing.proto" />
+        <Protobuf Include="..\..\Protos\ZooKeeper.proto" GrpcServices="Client" Link="Protos\ZooKeeper.proto" />
+    </ItemGroup>
+</Project>
