@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
+using Google.Protobuf.WellKnownTypes;
 using HBaseNet.Utility;
 using Pb;
 
@@ -13,6 +14,7 @@ namespace HBaseNet.HRpc
         public byte[] StopRow { get; }
         public bool CloseScanner { get; }
         public ulong? ScannerID { get; }
+        public byte[] RegionStop { get; private set; }
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
@@ -22,11 +24,18 @@ namespace HBaseNet.HRpc
             Table = table.ToUtf8Bytes();
         }
 
-        public ScanCall(string table, ulong? scannerID, bool closeScanner)
+        public ScanCall(string table, ulong? scannerID, byte[] startRow, bool closeScanner)
         {
             ScannerID = scannerID;
+            StartRow = startRow;
             CloseScanner = closeScanner;
             Table = table.ToUtf8Bytes();
+        }
+
+        public override void SetRegion(byte[] region, byte[] regionStop)
+        {
+            RegionStop = regionStop;
+            base.SetRegion(region, regionStop);
         }
 
         public override string Name => "Scan";
@@ -36,7 +45,8 @@ namespace HBaseNet.HRpc
             var scan = new ScanRequest
             {
                 Region = GetRegionSpecifier(),
-                CloseScanner = CloseScanner
+                CloseScanner = CloseScanner,
+                NumberOfRows = new UInt32Value{Value = 20}.Value//TODO:应该使用配置
             };
             if (ScannerID == null)
             {

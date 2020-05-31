@@ -1,6 +1,5 @@
 using System;
 using System.Buffers.Binary;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HBaseNet.Const;
@@ -12,20 +11,25 @@ namespace HBaseNet.Region
     public class RegionInfo
     {
         public byte[] Table { get; set; }
+
+        /// <summary>
+        /// table_name,start_key,timestamp[.MD5.]
+        /// </summary>
         public byte[] RegionName { get; set; }
+
+        public byte[] StartKey { get; set; }
         public byte[] StopKey { get; set; }
 
-        public class RegionKeyEqualityComparer : IEqualityComparer<byte[]>
+        public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)
         {
-            public bool Equals(byte[] x, byte[] y)
-            {
-                return Compare(x, y) == 0;
-            }
-
-            public int GetHashCode(byte[] obj)
-            {
-                return Compare(new byte[obj.Length].Initialize(ConstByte.Comma), obj);
-            }
+            var metaKey = BinaryEx.ConcatInOrder(
+                table,
+                new[] {ConstByte.Comma},
+                key,
+                new[] {ConstByte.Comma},
+                new[] {ConstByte.Colon}
+            );
+            return metaKey;
         }
 
         public static int Compare(byte[] a, byte[] b)
@@ -114,6 +118,7 @@ namespace HBaseNet.Region
             {
                 Table = reg.TableName.Qualifier.ToArray(),
                 RegionName = cell.Row.ToArray(),
+                StartKey = reg.StartKey.ToArray(),
                 StopKey = reg.EndKey.ToArray()
             };
             return result;

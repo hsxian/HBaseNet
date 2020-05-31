@@ -10,17 +10,23 @@ namespace HBaseNet.HRpc
     {
         public byte[] Table { get; protected set; }
         public byte[] Key { get; protected set; }
-        public abstract string Name { get;  }
-        public byte[] Region { get; set; }
+        public abstract string Name { get; }
+        public byte[] RegionName { get; private set; }
+
+        public virtual void SetRegion(byte[] region, byte[] regionStop)
+        {
+            RegionName = region;
+        }
 
         public abstract byte[] Serialize();
         public abstract IMessage ResponseParseFrom(byte[] bts);
+
         public RegionSpecifier GetRegionSpecifier()
         {
             return new RegionSpecifier
             {
                 Type = RegionSpecifier.Types.RegionSpecifierType.RegionName,
-                Value = ByteString.CopyFrom(Region)
+                Value = ByteString.CopyFrom(RegionName)
             };
         }
 

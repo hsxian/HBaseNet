@@ -55,6 +55,11 @@ namespace HBaseNet.HRpc
                                         Qualifier = ByteString.CopyFromUtf8(tt.Key),
                                         Value = ByteString.CopyFrom(tt.Value)
                                     };
+                                    if (MutationType == MutationProto.Types.MutationType.Delete)
+                                    {
+                                        quail.DeleteType = MutationProto.Types.DeleteType.DeleteMultipleVersions;
+                                    }
+
                                     return quail;
                                 })
                                 .ToArray();

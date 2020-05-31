@@ -9,6 +9,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "test", "test", "{A975D109-D
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HBaseNet.Test", "test\HBaseNet.Test\HBaseNet.Test.csproj", "{74EDDABA-58D2-4986-AEE6-0CBE8826E506}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HBaseNet.Console", "src\HBaseNet.Console\HBaseNet.Console.csproj", "{EC4DECEB-FE3E-4400-889D-D7B13A4ED617}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -23,9 +25,14 @@ Global
 		{74EDDABA-58D2-4986-AEE6-0CBE8826E506}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{74EDDABA-58D2-4986-AEE6-0CBE8826E506}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{74EDDABA-58D2-4986-AEE6-0CBE8826E506}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC4DECEB-FE3E-4400-889D-D7B13A4ED617}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC4DECEB-FE3E-4400-889D-D7B13A4ED617}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC4DECEB-FE3E-4400-889D-D7B13A4ED617}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC4DECEB-FE3E-4400-889D-D7B13A4ED617}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{5532B6B5-9952-490F-84C5-BE7319760AAF} = {031DE017-A1C3-449C-AF9B-420E8D008B51}
 		{74EDDABA-58D2-4986-AEE6-0CBE8826E506} = {A975D109-DE97-4625-8AEA-92AB8684D464}
+		{EC4DECEB-FE3E-4400-889D-D7B13A4ED617} = {031DE017-A1C3-449C-AF9B-420E8D008B51}
 	EndGlobalSection
 EndGlobal

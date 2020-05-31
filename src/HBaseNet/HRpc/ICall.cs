@@ -9,8 +9,9 @@ namespace HBaseNet.HRpc
         byte[] Table { get; }
         byte[] Key { get; }
         string Name { get; }
-        byte[] Region { get; set; }
+        byte[] RegionName { get; }
+        void SetRegion(byte[] region, byte[] regionStop);
         byte[] Serialize();
-        IMessage ResponseParseFrom(byte[]bts);
+        IMessage ResponseParseFrom(byte[] bts);
     }
 }

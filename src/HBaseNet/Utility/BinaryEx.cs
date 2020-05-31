@@ -48,5 +48,10 @@ namespace HBaseNet.Utility
         {
             return Encoding.UTF8.GetString(arr);
         }
+
+        public static int GetHash(this byte[] arr)
+        {
+            return arr?.Any() != true ? 0 : arr.Aggregate(17, (current, @by) => current << 31 + @by);
+        }
     }
 }

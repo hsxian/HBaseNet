@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using HBaseNet.Utility;
 using NUnit.Framework;
 using Pb;

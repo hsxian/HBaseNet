@@ -32,7 +32,7 @@ namespace HBaseNet.HRpc
         {
             return new GetCall(table.ToUtf8String(), key.ToUtf8String(), family)
             {
-                IsClosestBefore = false
+                IsClosestBefore = true
             };
         }
 

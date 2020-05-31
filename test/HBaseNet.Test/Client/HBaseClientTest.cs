@@ -1,7 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
+using HBaseNet.Utility;
 using NUnit.Framework;
+using Pb;
 
 namespace HBaseNet.Test.Client
 {
@@ -10,13 +13,7 @@ namespace HBaseNet.Test.Client
         [Test]
         public async Task TestHBaseClient()
         {
-            var ip = $"hbase-docker";
-            var client = new HBaseClient(ip);
-            var rs = await client.Get(
-                "student",
-                "1590241094",
-                new Dictionary<string, string[]> {{"default", new[] {""}}}
-            );
+           
         }
     }
 }
