@@ -1,20 +1,16 @@
 using System;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Net.WebSockets;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
-using Google.Protobuf.WellKnownTypes;
-using Grpc.Core;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
+using Microsoft.Extensions.Logging;
 using Pb;
 
 namespace HBaseNet.Region
@@ -29,9 +25,11 @@ namespace HBaseNet.Region
         private ConcurrentQueue<ICall> _rpcQueue;
         private Mutex _writeMutex;
         private IOException _ioException;
+        private ILogger<RegionClient> _logger;
 
         public RegionClient(string host, ushort port)
         {
+            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<RegionClient>();
             Host = host;
             Port = port;
             TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
@@ -58,7 +56,6 @@ namespace HBaseNet.Region
                 {
                     foreach (var rpc in _rpcQueue)
                     {
-                        
                     }
                 }
             }
@@ -93,7 +90,7 @@ namespace HBaseNet.Region
             catch (Exception e)when (e is IOException io)
             {
                 _ioException = io;
-                Debug.WriteLine($"error when write to rpc conn:{e}");
+                _logger.LogError($"error when write to rpc conn: ", e);
             }
             finally
             {
@@ -111,7 +108,7 @@ namespace HBaseNet.Region
             }
             catch (Exception e)
             {
-                Debug.WriteLine($"error when read fully from rpc conn:{e}");
+                _logger.LogError($"error when read fully from rpc conn: ", e);
             }
 
             return rs > 0;
@@ -149,26 +146,26 @@ namespace HBaseNet.Region
             buf = buf[(int) respLen..];
             if (resp.Exception != null)
             {
-                Debug.WriteLine($"Failed to deserialize the response header:{resp.Exception}");
+                _logger.LogError($"Failed to deserialize the response header:", resp.Exception);
             }
 
             if (resp.CallId == 0)
             {
-                Debug.WriteLine("Response doesn't have a call ID!");
+                _logger.LogError("Response doesn't have a call ID!");
                 return null;
             }
 
             if (resp.CallId != Id)
             {
-                Debug.WriteLine($"Not the callId we expected: {reqHeader.CallId}");
-                Debug.WriteLine(
+                _logger.LogError($"Not the callId we expected: {reqHeader.CallId}");
+                _logger.LogError(
                     $"remote exception :\r\n{resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}");
                 return null;
             }
 
             if (resp.Exception != null)
             {
-                Debug.WriteLine(
+                _logger.LogError(
                     $"remote exception :\r\n{resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}");
                 return null;
             }

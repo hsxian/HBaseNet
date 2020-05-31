@@ -7,6 +7,7 @@ namespace HBaseNet.Region
     {
         public int Compare(byte[] x, byte[] y)
         {
+            //This will allow the b plus tree to be arranged in reverse order.
             return RegionInfo.Compare(y, x);
         }
     }

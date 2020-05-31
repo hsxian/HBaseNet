@@ -1,7 +1,6 @@
 using System;
 using System.Buffers.Binary;
 using System.Linq;
-using System.Threading.Tasks;
 using HBaseNet.Const;
 using HBaseNet.Utility;
 using Pb;
@@ -101,7 +100,8 @@ namespace HBaseNet.Region
 
         public override string ToString()
         {
-            return $"*region.Info:Table: {Table}, RegionName: {RegionName}, StopKey: {StopKey}";
+            return
+                $"RegionInfo->Table: {Table.ToUtf8String()}, RegionName: {RegionName.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
         }
 
         public static RegionInfo ParseFromCell(Cell cell)

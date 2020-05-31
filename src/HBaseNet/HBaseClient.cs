@@ -1,12 +1,7 @@
 using System;
-using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Diagnostics;
 using System.Linq;
-using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
 using CSharpTest.Net.Collections;
 using CSharpTest.Net.IO;
@@ -16,6 +11,7 @@ using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Utility;
 using HBaseNet.Zk;
+using Microsoft.Extensions.Logging;
 using Pb;
 using RegionInfo = HBaseNet.Region.RegionInfo;
 using RegionClient = HBaseNet.Region.RegionClient;
@@ -24,6 +20,7 @@ namespace HBaseNet
 {
     public class HBaseClient
     {
+        private ILogger<HBaseClient> _logger;
         private readonly string _zkquorum;
         public static byte[] MetaTableName;
         public static Dictionary<string, string[]> InfoFamily;
@@ -36,6 +33,7 @@ namespace HBaseNet
         public HBaseClient(string zkquorum)
         {
             _zkquorum = zkquorum;
+            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<HBaseClient>();
             _zkHelper = new ZkHelper();
             InfoFamily = new Dictionary<string, string[]>
             {
@@ -95,21 +93,11 @@ namespace HBaseNet
             return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Increment);
         }
 
-        public async Task<IEnumerable<Result>> Scan(string table,
+        public async Task<ScanResponse> Scan(string table,
             IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
-            var results = new List<Result>();
-            ScanResponse scanres = null;
-            ScanCall rpc = null;
-            do
-            {
-                rpc = rpc == null
-                    ? new ScanCall(table, families, startRow, stopRow)
-                    : new ScanCall(table, families, rpc.RegionStop, stopRow);
-                scanres = await SendRPCToRegion<ScanResponse>(rpc);
-                if (scanres == null) return null;
-                results.AddRange(scanres.Results);
-            } while (true);
+            var response = await SendRPCToRegion<ScanResponse>(new ScanCall(table, families, startRow, stopRow));
+            return response;
         }
 
         private async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc) where TResponse : class, IMessage
@@ -162,7 +150,7 @@ namespace HBaseNet
             var discover = await DiscoverRegion(resp);
             if (discover?.client != null)
             {
-                Debug.WriteLine(
+                _logger.LogInformation(
                     $"Locate region server at : {discover.Value.client.Host}:{discover.Value.client.Port}, RegionName: {discover.Value.info.RegionName.ToUtf8String()}");
             }
 
@@ -198,7 +186,8 @@ namespace HBaseNet
             var zkc = _zkHelper.CreateClient(_zkquorum, TimeSpan.FromSeconds(30));
             var meta = await _zkHelper.LocateResource(zkc, ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom);
             _metaClient = new RegionClient(meta.Server.HostName, (ushort) meta.Server.Port);
-            if (_metaClient != null) Debug.WriteLine($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
+            if (_metaClient != null)
+                _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
         }
 
         private RegionClient ClientFor(RegionInfo info)
@@ -226,11 +215,12 @@ namespace HBaseNet
             var (_, info) = KeyRegionCache2.EnumerateFrom(search).FirstOrDefault();
             if (
                 info == null
-                || BinaryComparer.Compare(key, info.StopKey) >= 0
+                || info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0
                 || false == IsCacheKeyForTable(table, info.RegionName)
             )
                 return null;
-            Debug.WriteLine($"Check get region info from cache, search key:{search.ToUtf8String()},match region name:{info.RegionName.ToUtf8String()}");
+            _logger.LogDebug(
+                $"get region info from cache, search key:{search.ToUtf8String()},match region name:{info.RegionName.ToUtf8String()}");
             return info;
         }
     }
