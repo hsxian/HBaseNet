@@ -10,9 +10,8 @@ namespace HBaseNet.HRpc
 {
     public class MutateCall : BaseCall
     {
-        public byte[] Row { get; set; }
-        public IDictionary<string, IDictionary<string, byte[]>> Values { get; set; }
-        public MutationProto.Types.MutationType MutationType { get; set; }
+        private IDictionary<string, IDictionary<string, byte[]>> Values { get; set; }
+        private MutationProto.Types.MutationType MutationType { get; set; }
 
         public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
             MutationProto.Types.MutationType mutationType)
@@ -37,39 +36,37 @@ namespace HBaseNet.HRpc
                 }
             };
 
-            if (Values?.Any() == true)
-            {
-                var columns = Values
-                    .Select(t =>
+            if (Values?.Any() != true) return result.ToByteArray();
+            
+            var columns = Values
+                .Select(t =>
+                {
+                    var clo = new MutationProto.Types.ColumnValue
                     {
-                        var clo = new MutationProto.Types.ColumnValue
+                        Family = ByteString.CopyFromUtf8(t.Key),
+                    };
+                    if (t.Value?.Any() != true) return clo;
+                    var quals = t.Value.Select(tt =>
                         {
-                            Family = ByteString.CopyFromUtf8(t.Key),
-                        };
-                        if (t.Value?.Any() == true)
-                        {
-                            var quals = t.Value.Select(tt =>
-                                {
-                                    var quail = new MutationProto.Types.ColumnValue.Types.QualifierValue
-                                    {
-                                        Qualifier = ByteString.CopyFromUtf8(tt.Key),
-                                        Value = ByteString.CopyFrom(tt.Value)
-                                    };
-                                    if (MutationType == MutationProto.Types.MutationType.Delete)
-                                    {
-                                        quail.DeleteType = MutationProto.Types.DeleteType.DeleteMultipleVersions;
-                                    }
+                            var quail = new MutationProto.Types.ColumnValue.Types.QualifierValue
+                            {
+                                Qualifier = ByteString.CopyFromUtf8(tt.Key),
+                                Value = ByteString.CopyFrom(tt.Value)
+                            };
+                            if (MutationType == MutationProto.Types.MutationType.Delete)
+                            {
+                                quail.DeleteType = MutationProto.Types.DeleteType.DeleteMultipleVersions;
+                            }
 
-                                    return quail;
-                                })
-                                .ToArray();
-                            clo.QualifierValue.AddRange(quals);
-                        }
+                            return quail;
+                        })
+                        .ToArray();
+                    clo.QualifierValue.AddRange(quals);
 
-                        return clo;
-                    }).ToArray();
-                result.Mutation.ColumnValue.AddRange(columns);
-            }
+                    return clo;
+                }).ToArray();
+            
+            result.Mutation.ColumnValue.AddRange(columns);
 
             return result.ToByteArray();
         }

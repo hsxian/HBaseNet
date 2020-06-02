@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using CSharpTest.Net.Collections;
 using CSharpTest.Net.IO;
@@ -26,7 +27,7 @@ namespace HBaseNet
         public static Dictionary<string, string[]> InfoFamily;
         public static RegionInfo MetaRegionInfo;
         private RegionClient _metaClient;
-        private ZkHelper _zkHelper;
+        private readonly ZkHelper _zkHelper;
         public ConcurrentDictionary<RegionInfo, RegionClient> RegionClientCache { get; private set; }
         public BTreeDictionary<byte[], RegionInfo> KeyRegionCache2 { get; private set; }
 
@@ -100,6 +101,8 @@ namespace HBaseNet
             return response;
         }
 
+        private readonly SemaphoreSlim _locateRegionSemaphore = new SemaphoreSlim(1, 1);
+
         private async Task<RegionClient> QueueRPC(ICall rpc)
         {
             var reg = GetRegionInfo(rpc.Table, rpc.Key);
@@ -111,7 +114,10 @@ namespace HBaseNet
 
             if (client == null)
             {
+                _locateRegionSemaphore.Wait();
                 var lr = await LocateRegion(rpc.Table, rpc.Key);
+                _locateRegionSemaphore.Release();
+
                 if (lr != null)
                 {
                     client = lr.Value.client;
@@ -134,15 +140,15 @@ namespace HBaseNet
             var client = await QueueRPC(rpc);
             if (client == null)
             {
+                _logger.LogWarning("queue rpc return none client.");
                 return null;
             }
 
             var result = await client.GetRPCResult();
-            if (result?.Msg is TResponse res)
+            if (result.Msg is TResponse res)
             {
                 return res;
             }
-
             return null;
         }
 

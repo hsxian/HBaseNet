@@ -17,21 +17,21 @@ namespace HBaseNet.Region
 {
     public class RegionClient
     {
-        public uint Id { get; private set; }
+        private uint Id { get; set; }
         public string Host { get; private set; }
         public ushort Port { get; private set; }
-        public NetworkStream Conn { get; private set; }
-        public int TimeOut { get; set; }
+        private NetworkStream Conn { get; set; }
+        private int TimeOut { get; set; }
         private readonly ConcurrentQueue<ICall> _rpcQueue;
         private readonly ConcurrentQueue<RPCResult> _rpcResultQueue;
         private readonly ILogger<RegionClient> _logger;
-        private SemaphoreSlim _sendRPCSemaphore;
+
         public RegionClient(string host, ushort port)
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<RegionClient>();
             Host = host;
             Port = port;
-            TimeOut = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
+            TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
             var tcp = new TcpClient();
 
             var ipAddress = IPAddress.TryParse(host, out var ip)
@@ -43,7 +43,6 @@ namespace HBaseNet.Region
             Conn.WriteTimeout = TimeOut;
             _rpcQueue = new ConcurrentQueue<ICall>();
             _rpcResultQueue = new ConcurrentQueue<RPCResult>();
-            _sendRPCSemaphore = new SemaphoreSlim(1);
             _ = SendHello();
             ProcessRPCQueue();
         }
@@ -65,7 +64,7 @@ namespace HBaseNet.Region
                             }
                             catch (Exception e)
                             {
-                                result.Erroe = e;
+                                result.Error = e;
                                 _logger.LogError("SendRPC in RPCQueue", e);
                             }
                             finally
@@ -89,21 +88,9 @@ namespace HBaseNet.Region
 
         public async Task<RPCResult> GetRPCResult()
         {
-            RPCResult result = null;
-            do
-            {
-                if (_rpcResultQueue.TryPeek(out var rpcResult))
-                {
-                    result = rpcResult;
-                }
-                else
-                {
-                    await Task.Delay(1);
-                }
-            } while (result == null);
-
-            _rpcResultQueue.TryDequeue(out _);
-            return result;
+            while (_rpcResultQueue.Count < 1) await Task.Delay(1);
+            _rpcResultQueue.TryDequeue(out var rpcResult);
+            return rpcResult;
         }
 
         private Task<bool> SendHello()
@@ -120,7 +107,7 @@ namespace HBaseNet.Region
             var header = "HBas\x00\x50".ToUtf8Bytes(); // \x50 = Simple Auth.
             var buf = new byte[header.Length + 4 + data.Length];
             header.CopyTo(buf, 0);
-            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint)data.Length));
+            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint) data.Length));
             dataLenBig.CopyTo(buf, 6);
             data.CopyTo(buf, header.Length + 4);
             return Write(buf);
@@ -135,9 +122,6 @@ namespace HBaseNet.Region
             catch (Exception e) when (e is IOException io)
             {
                 _logger.LogError($"error when write to rpc conn: ", e);
-            }
-            finally
-            {
             }
 
             return true;
@@ -160,7 +144,7 @@ namespace HBaseNet.Region
 
         public async Task<T> SendRPC<T>(ICall rpc) where T : class, IMessage
         {
-            _sendRPCSemaphore.Wait();
+            // await _sendRPCSemaphore.WaitAsync();
             Id++;
             var reqHeader = new RequestHeader
             {
@@ -169,11 +153,11 @@ namespace HBaseNet.Region
                 RequestParam = true
             };
             var payload = rpc.Serialize();
-            var payloadLen = ProtoBufEx.EncodeVarint((ulong)payload.Length);
+            var payloadLen = ProtoBufEx.EncodeVarint((ulong) payload.Length);
             var headerData = reqHeader.ToByteArray();
             var buf = new byte[4 + 1 + headerData.Length + payloadLen.Length + payload.Length];
-            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)(buf.Length - 4));
-            buf[4] = (byte)headerData.Length;
+            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint) (buf.Length - 4));
+            buf[4] = (byte) headerData.Length;
             headerData.CopyTo(buf, 5);
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
@@ -186,9 +170,9 @@ namespace HBaseNet.Region
             await ReadFully(buf);
             var (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
             var resp = new ResponseHeader();
-            buf = buf[(int)nb..];
-            resp.MergeFrom(buf[..(int)respLen]);
-            buf = buf[(int)respLen..];
+            buf = buf[(int) nb..];
+            resp.MergeFrom(buf[..(int) respLen]);
+            buf = buf[(int) respLen..];
             if (resp.Exception != null)
             {
                 _logger.LogError($"Failed to deserialize the response header:", resp.Exception);
@@ -197,7 +181,6 @@ namespace HBaseNet.Region
             if (resp.CallId == 0)
             {
                 _logger.LogError("Response doesn't have a call ID!");
-                _sendRPCSemaphore.Release();
                 return null;
             }
 
@@ -206,10 +189,8 @@ namespace HBaseNet.Region
                 _logger.LogError($"Not the callId we expected: {reqHeader.CallId}");
                 _logger.LogError(
                     $"remote exception :{resp.Exception}");
-                _sendRPCSemaphore.Release();
                 return null;
             }
-            _sendRPCSemaphore.Release();
 
             if (resp.Exception != null)
             {
@@ -219,9 +200,9 @@ namespace HBaseNet.Region
             }
 
             (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
-            buf = buf[(int)nb..];
+            buf = buf[(int) nb..];
             var rpcResp = rpc.ResponseParseFrom(buf);
-            buf = buf[(int)respLen..];
+            buf = buf[(int) respLen..];
             var result = rpcResp as T;
             return result;
         }

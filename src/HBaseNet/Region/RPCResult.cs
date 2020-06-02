@@ -7,6 +7,6 @@ namespace HBaseNet.Region
     public class RPCResult
     {
         public IMessage Msg { get; set; }
-        public Exception Erroe { get; set; }
+        public Exception Error { get; set; }
     }
 }

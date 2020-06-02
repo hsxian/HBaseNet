@@ -14,12 +14,12 @@ namespace HBaseNet.HRpc
 {
     public class GetCall : BaseCall
     {
-        public bool IsClosestBefore { get; set; }
+        private bool IsClosestBefore { get; set; }
 
         /// <summary>
         /// family, qualifiers 
         /// </summary>
-        public IDictionary<string, string[]> Family { get; protected set; }
+        private IDictionary<string, string[]> Family { get; set; }
 
         public GetCall(string table, string key, IDictionary<string, string[]> family)
         {

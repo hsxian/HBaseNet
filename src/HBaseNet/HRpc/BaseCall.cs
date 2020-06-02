@@ -21,7 +21,7 @@ namespace HBaseNet.HRpc
         public abstract byte[] Serialize();
         public abstract IMessage ResponseParseFrom(byte[] bts);
 
-        public RegionSpecifier GetRegionSpecifier()
+        protected RegionSpecifier GetRegionSpecifier()
         {
             return new RegionSpecifier
             {
@@ -30,7 +30,7 @@ namespace HBaseNet.HRpc
             };
         }
 
-        public IEnumerable<Column> ConvertToColumns(IDictionary<string, string[]> families)
+        protected IEnumerable<Column> ConvertToColumns(IDictionary<string, string[]> families)
         {
             var columns = families
                 .Select(t =>

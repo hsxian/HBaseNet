@@ -48,7 +48,7 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
             if (await sto.CheckTable() == false) return;
-            var putCount = 50;
+            var putCount = 1000;
             sth.Restart();
             await sto.ExecPut(putCount);
             Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");

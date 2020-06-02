@@ -9,12 +9,12 @@ namespace HBaseNet.HRpc
 {
     public class ScanCall : BaseCall
     {
-        public IDictionary<string, string[]> Families { get; }
-        public byte[] StartRow { get; }
-        public byte[] StopRow { get; }
-        public bool CloseScanner { get; }
-        public ulong? ScannerID { get; }
-        public byte[] RegionStop { get; private set; }
+        private IDictionary<string, string[]> Families { get; }
+        private byte[] StartRow { get; }
+        private byte[] StopRow { get; }
+        private bool CloseScanner { get; }
+        private ulong? ScannerID { get; }
+        private byte[] RegionStop { get; set; }
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
@@ -48,7 +48,7 @@ namespace HBaseNet.HRpc
             {
                 Region = GetRegionSpecifier(),
                 CloseScanner = CloseScanner,
-                NumberOfRows = new UInt32Value {Value = 20}.Value //TODO:应该使用配置
+                NumberOfRows = new UInt32Value {Value = 200}.Value //TODO:应该使用配置
             };
             if (ScannerID == null)
             {
