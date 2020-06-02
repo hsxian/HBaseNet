@@ -100,7 +100,7 @@ namespace HBaseNet
             return response;
         }
 
-        private async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc) where TResponse : class, IMessage
+        private async Task<RegionClient> QueueRPC(ICall rpc)
         {
             var reg = GetRegionInfo(rpc.Table, rpc.Key);
             RegionClient client = null;
@@ -123,15 +123,25 @@ namespace HBaseNet
                 }
             }
 
-
             rpc.SetRegion(reg.RegionName, reg.StopKey);
-            return await client.SendRPC<TResponse>(rpc);
+
+            client.QueueRPC(rpc);
+            return client;
         }
 
-        private Task QueueRPC<TResponse>(ICall rpc)
+        private async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc) where TResponse : class, IMessage
         {
-            var reg = GetRegionInfo(rpc.Table, rpc.Key);
+            var client = await QueueRPC(rpc);
+            if (client == null)
+            {
+                return null;
+            }
 
+            var result = await client.GetRPCResult();
+            if (result?.Msg is TResponse res)
+            {
+                return res;
+            }
 
             return null;
         }

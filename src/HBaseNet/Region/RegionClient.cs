@@ -22,17 +22,16 @@ namespace HBaseNet.Region
         public ushort Port { get; private set; }
         public NetworkStream Conn { get; private set; }
         public int TimeOut { get; set; }
-        private ConcurrentQueue<ICall> _rpcQueue;
-        private Mutex _writeMutex;
-        private IOException _ioException;
-        private ILogger<RegionClient> _logger;
-
+        private readonly ConcurrentQueue<ICall> _rpcQueue;
+        private readonly ConcurrentQueue<RPCResult> _rpcResultQueue;
+        private readonly ILogger<RegionClient> _logger;
+        private SemaphoreSlim _sendRPCSemaphore;
         public RegionClient(string host, ushort port)
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<RegionClient>();
             Host = host;
             Port = port;
-            TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
+            TimeOut = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
             var tcp = new TcpClient();
 
             var ipAddress = IPAddress.TryParse(host, out var ip)
@@ -42,23 +41,69 @@ namespace HBaseNet.Region
             Conn = tcp.GetStream();
             Conn.ReadTimeout = TimeOut;
             Conn.WriteTimeout = TimeOut;
-            _writeMutex = new Mutex();
+            _rpcQueue = new ConcurrentQueue<ICall>();
+            _rpcResultQueue = new ConcurrentQueue<RPCResult>();
+            _sendRPCSemaphore = new SemaphoreSlim(1);
             _ = SendHello();
+            ProcessRPCQueue();
         }
 
-        private async Task ProcessRPCQueue()
+        private void ProcessRPCQueue()
         {
-            while (true)
+            Task.Factory.StartNew(async () =>
             {
-                await Task.Delay(100);
-                _writeMutex.WaitOne();
-                if (_ioException != null)
+                while (true)
                 {
-                    foreach (var rpc in _rpcQueue)
+                    if (_rpcQueue.Count > 0)
                     {
+                        while (_rpcQueue.TryDequeue(out var rpc))
+                        {
+                            var result = new RPCResult();
+                            try
+                            {
+                                result.Msg = await SendRPC<IMessage>(rpc);
+                            }
+                            catch (Exception e)
+                            {
+                                result.Erroe = e;
+                                _logger.LogError("SendRPC in RPCQueue", e);
+                            }
+                            finally
+                            {
+                                _rpcResultQueue.Enqueue(result);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        await Task.Delay(1);
                     }
                 }
-            }
+            }, TaskCreationOptions.LongRunning);
+        }
+
+        public void QueueRPC(ICall rpc)
+        {
+            _rpcQueue.Enqueue(rpc);
+        }
+
+        public async Task<RPCResult> GetRPCResult()
+        {
+            RPCResult result = null;
+            do
+            {
+                if (_rpcResultQueue.TryPeek(out var rpcResult))
+                {
+                    result = rpcResult;
+                }
+                else
+                {
+                    await Task.Delay(1);
+                }
+            } while (result == null);
+
+            _rpcResultQueue.TryDequeue(out _);
+            return result;
         }
 
         private Task<bool> SendHello()
@@ -75,7 +120,7 @@ namespace HBaseNet.Region
             var header = "HBas\x00\x50".ToUtf8Bytes(); // \x50 = Simple Auth.
             var buf = new byte[header.Length + 4 + data.Length];
             header.CopyTo(buf, 0);
-            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint) data.Length));
+            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint)data.Length));
             dataLenBig.CopyTo(buf, 6);
             data.CopyTo(buf, header.Length + 4);
             return Write(buf);
@@ -87,9 +132,8 @@ namespace HBaseNet.Region
             {
                 await Conn.WriteAsync(buf);
             }
-            catch (Exception e)when (e is IOException io)
+            catch (Exception e) when (e is IOException io)
             {
-                _ioException = io;
                 _logger.LogError($"error when write to rpc conn: ", e);
             }
             finally
@@ -116,6 +160,7 @@ namespace HBaseNet.Region
 
         public async Task<T> SendRPC<T>(ICall rpc) where T : class, IMessage
         {
+            _sendRPCSemaphore.Wait();
             Id++;
             var reqHeader = new RequestHeader
             {
@@ -124,11 +169,11 @@ namespace HBaseNet.Region
                 RequestParam = true
             };
             var payload = rpc.Serialize();
-            var payloadLen = ProtoBufEx.EncodeVarint((ulong) payload.Length);
+            var payloadLen = ProtoBufEx.EncodeVarint((ulong)payload.Length);
             var headerData = reqHeader.ToByteArray();
             var buf = new byte[4 + 1 + headerData.Length + payloadLen.Length + payload.Length];
-            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint) (buf.Length - 4));
-            buf[4] = (byte) headerData.Length;
+            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)(buf.Length - 4));
+            buf[4] = (byte)headerData.Length;
             headerData.CopyTo(buf, 5);
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
@@ -141,9 +186,9 @@ namespace HBaseNet.Region
             await ReadFully(buf);
             var (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
             var resp = new ResponseHeader();
-            buf = buf[(int) nb..];
-            resp.MergeFrom(buf[..(int) respLen]);
-            buf = buf[(int) respLen..];
+            buf = buf[(int)nb..];
+            resp.MergeFrom(buf[..(int)respLen]);
+            buf = buf[(int)respLen..];
             if (resp.Exception != null)
             {
                 _logger.LogError($"Failed to deserialize the response header:", resp.Exception);
@@ -152,6 +197,7 @@ namespace HBaseNet.Region
             if (resp.CallId == 0)
             {
                 _logger.LogError("Response doesn't have a call ID!");
+                _sendRPCSemaphore.Release();
                 return null;
             }
 
@@ -159,9 +205,11 @@ namespace HBaseNet.Region
             {
                 _logger.LogError($"Not the callId we expected: {reqHeader.CallId}");
                 _logger.LogError(
-                    $"remote exception :\r\n{resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}");
+                    $"remote exception :{resp.Exception}");
+                _sendRPCSemaphore.Release();
                 return null;
             }
+            _sendRPCSemaphore.Release();
 
             if (resp.Exception != null)
             {
@@ -171,9 +219,9 @@ namespace HBaseNet.Region
             }
 
             (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
-            buf = buf[(int) nb..];
+            buf = buf[(int)nb..];
             var rpcResp = rpc.ResponseParseFrom(buf);
-            buf = buf[(int) respLen..];
+            buf = buf[(int)respLen..];
             var result = rpcResp as T;
             return result;
         }
