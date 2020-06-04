@@ -48,7 +48,7 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
             if (await sto.CheckTable() == false) return;
-            var putCount = 1000;
+            var putCount = 10;
             sth.Restart();
             await sto.ExecPut(putCount);
             Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");
@@ -58,7 +58,11 @@ namespace HBaseNet.Console
             await mto.ExecPut(putCount);
             Log.Logger.Information($"exec multi thread put ,count: {putCount},take :{sth.Elapsed}");
 
-            await sto.ExecScanAndDelete();
+            sth.Restart();
+            await sto.ExecScan();
+            Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
+            
+            // await sto.ExecScanAndDelete();
         }
     }
 }

@@ -88,9 +88,15 @@ namespace HBaseNet.Region
 
         public async Task<RPCResult> GetRPCResult()
         {
-            while (_rpcResultQueue.Count < 1) await Task.Delay(1);
-            _rpcResultQueue.TryDequeue(out var rpcResult);
-            return rpcResult;
+            while (_rpcResultQueue.Count < 1) await Task.Delay(10);
+            RPCResult result = null;
+            do
+            {
+                _rpcResultQueue.TryDequeue(out var rpcResult);
+                result = rpcResult;
+            } while (result == null);
+
+            return result;
         }
 
         private Task<bool> SendHello()

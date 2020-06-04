@@ -14,7 +14,7 @@ namespace HBaseNet.HRpc
         private byte[] StopRow { get; }
         private bool CloseScanner { get; }
         private ulong? ScannerID { get; }
-        private byte[] RegionStop { get; set; }
+        public byte[] RegionStop { get;private set; }
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
@@ -48,7 +48,7 @@ namespace HBaseNet.HRpc
             {
                 Region = GetRegionSpecifier(),
                 CloseScanner = CloseScanner,
-                NumberOfRows = new UInt32Value {Value = 200}.Value //TODO:应该使用配置
+                NumberOfRows = new UInt32Value {Value = 100}.Value //TODO:应该使用配置
             };
             if (ScannerID == null)
             {

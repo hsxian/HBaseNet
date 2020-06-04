@@ -63,7 +63,7 @@ namespace HBaseNet
             return await SendRPCToRegion<GetResponse>(get);
         }
 
-        public async Task<MutateResponse> Mutate(string table, string rowKey,
+        private async Task<MutateResponse> Mutate(string table, string rowKey,
             IDictionary<string, IDictionary<string, byte[]>> values, MutationProto.Types.MutationType mutationType)
         {
             var mutate = new MutateCall(table, rowKey, values, mutationType);
@@ -94,11 +94,36 @@ namespace HBaseNet
             return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Increment);
         }
 
-        public async Task<ScanResponse> Scan(string table,
+        public async Task<List<Result>> Scan(string table,
             IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
-            var response = await SendRPCToRegion<ScanResponse>(new ScanCall(table, families, startRow, stopRow));
-            return response;
+            var results = new List<Result>();
+            ScanResponse scanres = null;
+            ScanCall rpc = null;
+            do
+            {
+                rpc = rpc == null
+                    ? new ScanCall(table, families, startRow, stopRow)
+                    : new ScanCall(table, families, rpc.RegionStop, stopRow);
+                scanres = await SendRPCToRegion<ScanResponse>(rpc);
+                if (scanres?.Results?.Any() != true) break;
+                results.AddRange(scanres.Results);
+                foreach (var item in scanres.Results)
+                {
+                    rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
+                    scanres = await SendRPCToRegion<ScanResponse>(rpc);
+                    if (scanres?.Results?.Any() != true) break;
+                    results.AddRange(scanres.Results);
+                }
+
+                rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
+                scanres = await SendRPCToRegion<ScanResponse>(rpc);
+                if (rpc.RegionStop?.Length == 0
+                    || stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.RegionStop) <= 0)
+                    return results;
+            } while (true);
+
+            return results;
         }
 
         private readonly SemaphoreSlim _locateRegionSemaphore = new SemaphoreSlim(1, 1);
@@ -149,6 +174,7 @@ namespace HBaseNet
             {
                 return res;
             }
+
             return null;
         }
 
@@ -192,9 +218,14 @@ namespace HBaseNet
             var host = serverData[..idxColon].ToUtf8String();
             if (!ushort.TryParse(serverData[(idxColon + 1)..].ToUtf8String(), out var port)) return null;
             var client = new RegionClient(host, port);
+            AddRegionToCache(reg, client);
+            return await Task.FromResult((client, reg));
+        }
+
+        private void AddRegionToCache(RegionInfo reg,RegionClient client)
+        {
             KeyRegionCache2.TryAdd(reg.RegionName, reg);
             RegionClientCache.TryAdd(reg, client);
-            return await Task.FromResult((client, reg));
         }
 
         private async Task LocateMeta()

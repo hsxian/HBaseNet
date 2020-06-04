@@ -31,12 +31,16 @@ namespace HBaseNet.Console
                 var rs = await _client.Put(Program.Table, rowKey, Program.Values);
             }
         }
-
+        public async Task ExecScan()
+        {
+            var scanResults = await _client.Scan(Program.Table, Program.Family, "0".ToUtf8Bytes(), "5".ToUtf8Bytes());
+            Log.Information($"scan result count:{scanResults.Count}");
+        }
         public async Task ExecScanAndDelete()
         {
-            var scanResults = await _client.Scan(Program.Table, Program.Family, "0".ToUtf8Bytes(), "9".ToUtf8Bytes());
-
-            foreach (var result in scanResults.Results)
+            var scanResults = await _client.Scan(Program.Table, Program.Family, "0".ToUtf8Bytes(), "1".ToUtf8Bytes());
+            Log.Information($"scan result count:{scanResults.Count}");
+            foreach (var result in scanResults)
             {
                 var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).Single();
                 var getResult = await _client.Get(Program.Table, rowKey, null);
