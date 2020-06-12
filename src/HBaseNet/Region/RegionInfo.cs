@@ -18,6 +18,7 @@ namespace HBaseNet.Region
 
         public byte[] StartKey { get; set; }
         public byte[] StopKey { get; set; }
+        public bool IsAvailable { get; set; }
 
         public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)
         {

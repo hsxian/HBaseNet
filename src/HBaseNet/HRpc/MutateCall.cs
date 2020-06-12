@@ -10,16 +10,14 @@ namespace HBaseNet.HRpc
 {
     public class MutateCall : BaseCall
     {
-        private IDictionary<string, IDictionary<string, byte[]>> Values { get; set; }
-        private MutationProto.Types.MutationType MutationType { get; set; }
-
-        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
-            MutationProto.Types.MutationType mutationType)
+        public IDictionary<string, IDictionary<string, byte[]>> Values { get; set; }
+        public MutationProto.Types.MutationType MutationType { get; set; }
+        
+        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values)
         {
             Table = table.ToUtf8Bytes();
             Key = key.ToUtf8Bytes();
             Values = values;
-            MutationType = mutationType;
         }
 
         public override string Name => "Mutate";
@@ -37,7 +35,7 @@ namespace HBaseNet.HRpc
             };
 
             if (Values?.Any() != true) return result.ToByteArray();
-            
+
             var columns = Values
                 .Select(t =>
                 {
@@ -65,13 +63,13 @@ namespace HBaseNet.HRpc
 
                     return clo;
                 }).ToArray();
-            
+
             result.Mutation.ColumnValue.AddRange(columns);
 
             return result.ToByteArray();
         }
 
-        public override IMessage ResponseParseFrom(byte[] bts)
+        public override IMessage ParseResponseFrom(byte[] bts)
         {
             return bts.TryParseTo(MutateResponse.Parser.ParseFrom);
         }

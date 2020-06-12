@@ -9,19 +9,28 @@ namespace HBaseNet.HRpc
 {
     public class ScanCall : BaseCall
     {
-        private IDictionary<string, string[]> Families { get; }
-        private byte[] StartRow { get; }
-        private byte[] StopRow { get; }
+        public IDictionary<string, string[]> Families { get; set; }
+        public byte[] StartRow { get; set; }
+        public byte[] StopRow { get; set; }
         private bool CloseScanner { get; }
         private ulong? ScannerID { get; }
-        public byte[] RegionStop { get;private set; }
+        public Filter.IFilter Filters { get; set; }
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
-            Families = families;
             StartRow = startRow;
             StopRow = stopRow;
+            Families = families;
             Table = table.ToUtf8Bytes();
+            Key = startRow;
+        }
+
+        public ScanCall(byte[] table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
+        {
+            StartRow = startRow;
+            StopRow = stopRow;
+            Families = families;
+            Table = table;
             Key = startRow;
         }
 
@@ -34,10 +43,13 @@ namespace HBaseNet.HRpc
             Key = startRow;
         }
 
-        public override void SetRegion(byte[] region, byte[] regionStop)
+        public ScanCall(byte[] table, ulong? scannerID, byte[] startRow, bool closeScanner)
         {
-            RegionStop = regionStop;
-            base.SetRegion(region, regionStop);
+            ScannerID = scannerID;
+            StartRow = startRow;
+            CloseScanner = closeScanner;
+            Table = table;
+            Key = startRow;
         }
 
         public override string Name => "Scan";
@@ -56,9 +68,13 @@ namespace HBaseNet.HRpc
                 {
                     StartRow = ByteString.CopyFrom(StartRow),
                     StopRow = ByteString.CopyFrom(StopRow),
+                    Filter = Filters?.ConvertToPBFilter()
                 };
                 var cols = ConvertToColumns(Families);
-                scan.Scan.Column.AddRange(cols);
+                if (cols?.Any() == true)
+                {
+                    scan.Scan.Column.AddRange(cols);
+                }
             }
             else
             {
@@ -68,7 +84,7 @@ namespace HBaseNet.HRpc
             return scan.ToByteArray();
         }
 
-        public override IMessage ResponseParseFrom(byte[] bts)
+        public override IMessage ParseResponseFrom(byte[] bts)
         {
             return bts.TryParseTo(ScanResponse.Parser.ParseFrom);
         }

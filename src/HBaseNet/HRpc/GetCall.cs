@@ -19,18 +19,26 @@ namespace HBaseNet.HRpc
         /// <summary>
         /// family, qualifiers 
         /// </summary>
-        private IDictionary<string, string[]> Family { get; set; }
+        public IDictionary<string, string[]> Families { get; set; }
 
-        public GetCall(string table, string key, IDictionary<string, string[]> family)
+        public Filter.IFilter Filters { get; set; }
+        public bool IsExistsOnly { get; set; }
+
+        public GetCall(string table, string key)
         {
             Table = table.ToUtf8Bytes();
             Key = key.ToUtf8Bytes();
-            Family = family;
         }
 
-        public static GetCall CreateGetBefore(byte[] table, byte[] key, IDictionary<string, string[]> family)
+        public GetCall(byte[] table, byte[] key)
         {
-            return new GetCall(table.ToUtf8String(), key.ToUtf8String(), family)
+            Table = table;
+            Key = key;
+        }
+
+        public static GetCall CreateGetBefore(byte[] table, byte[] key)
+        {
+            return new GetCall(table.ToUtf8String(), key.ToUtf8String())
             {
                 IsClosestBefore = true
             };
@@ -45,24 +53,22 @@ namespace HBaseNet.HRpc
                 Region = GetRegionSpecifier(),
                 Get = new Pb.Get
                 {
-                    Row = ByteString.CopyFrom(Key)
+                    Row = ByteString.CopyFrom(Key),
+                    ExistenceOnly = IsExistsOnly,
+                    ClosestRowBefore = IsClosestBefore,
+                    Filter = Filters?.ConvertToPBFilter()
                 }
             };
-            if (Family?.Any() == true)
+            if (Families?.Any() == true)
             {
-                get.Get.Column.AddRange(ConvertToColumns(Family));
-            }
-
-            if (IsClosestBefore)
-            {
-                get.Get.ClosestRowBefore = true;
+                get.Get.Column.AddRange(ConvertToColumns(Families));
             }
 
             return get.ToByteArray();
         }
-        
 
-        public override IMessage ResponseParseFrom(byte[] bts)
+
+        public override IMessage ParseResponseFrom(byte[] bts)
         {
             return bts.TryParseTo(GetResponse.Parser.ParseFrom);
         }

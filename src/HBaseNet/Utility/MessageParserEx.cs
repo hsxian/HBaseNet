@@ -22,7 +22,7 @@ namespace HBaseNet.Utility
             }
             catch (Exception e)
             {
-                _logger.LogError($"TryParseTo {typeof(T)} failed", e);
+                _logger.LogError(e, $"TryParseTo {typeof(T)} failed");
             }
 
             return result;

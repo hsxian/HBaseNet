@@ -21,15 +21,15 @@ namespace HBaseNet
 {
     public class HBaseClient
     {
-        private ILogger<HBaseClient> _logger;
+        private readonly ILogger<HBaseClient> _logger;
         private readonly string _zkquorum;
-        public static byte[] MetaTableName;
-        public static Dictionary<string, string[]> InfoFamily;
-        public static RegionInfo MetaRegionInfo;
+        private static byte[] MetaTableName;
+        private static Dictionary<string, string[]> InfoFamily;
+        private static RegionInfo MetaRegionInfo;
         private RegionClient _metaClient;
         private readonly ZkHelper _zkHelper;
-        public ConcurrentDictionary<RegionInfo, RegionClient> RegionClientCache { get; private set; }
-        public BTreeDictionary<byte[], RegionInfo> KeyRegionCache2 { get; private set; }
+        private ConcurrentDictionary<RegionInfo, RegionClient> RegionClientCache { get; set; }
+        private BTreeDictionary<byte[], RegionInfo> KeyRegionCache2 { get; set; }
 
         public HBaseClient(string zkquorum)
         {
@@ -49,62 +49,64 @@ namespace HBaseNet
             };
             RegionClientCache = new ConcurrentDictionary<RegionInfo, RegionClient>();
             KeyRegionCache2 = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
+            // ReestablishRegion(MetaRegionInfo);
         }
 
         public async Task<bool> CheckTable(string table)
         {
-            var get = new GetCall(table, "theKey", null);
+            var get = new GetCall(table, "theKey");
             return null != await SendRPCToRegion<GetResponse>(get);
         }
 
-        public async Task<GetResponse> Get(string table, string rowKey, IDictionary<string, string[]> families)
+        public async Task<GetResponse> Get(GetCall get)
         {
-            var get = new GetCall(table, rowKey, families);
             return await SendRPCToRegion<GetResponse>(get);
         }
 
-        private async Task<MutateResponse> Mutate(string table, string rowKey,
-            IDictionary<string, IDictionary<string, byte[]>> values, MutationProto.Types.MutationType mutationType)
+        private async Task<MutateResponse> Mutate(ICall mutate)
         {
-            var mutate = new MutateCall(table, rowKey, values, mutationType);
             return await SendRPCToRegion<MutateResponse>(mutate);
         }
 
-        public async Task<MutateResponse> Put(string table, string rowKey,
-            IDictionary<string, IDictionary<string, byte[]>> values)
+        public async Task<MutateResponse> Put(MutateCall mutate)
         {
-            return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Put);
+            mutate.MutationType = MutationProto.Types.MutationType.Put;
+            return await Mutate(mutate);
         }
 
-        public async Task<MutateResponse> Delete(string table, string rowKey,
-            IDictionary<string, IDictionary<string, byte[]>> values)
+        public async Task<MutateResponse> Delete(MutateCall mutate)
         {
-            return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Delete);
+            mutate.MutationType = MutationProto.Types.MutationType.Delete;
+            return await Mutate(mutate);
         }
 
-        public async Task<MutateResponse> Append(string table, string rowKey,
-            IDictionary<string, IDictionary<string, byte[]>> values)
+        public async Task<MutateResponse> Append(MutateCall mutate)
         {
-            return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Append);
+            mutate.MutationType = MutationProto.Types.MutationType.Append;
+            return await Mutate(mutate);
         }
 
-        public async Task<MutateResponse> Increment(string table, string rowKey,
-            IDictionary<string, IDictionary<string, byte[]>> values)
+        public async Task<MutateResponse> Increment(MutateCall mutate)
         {
-            return await Mutate(table, rowKey, values, MutationProto.Types.MutationType.Increment);
+            mutate.MutationType = MutationProto.Types.MutationType.Increment;
+            return await Mutate(mutate);
         }
 
-        public async Task<List<Result>> Scan(string table,
-            IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
+        public async Task<List<Result>> Scan(ScanCall scan)
         {
             var results = new List<Result>();
-            ScanResponse scanres = null;
+            ScanResponse scanres;
             ScanCall rpc = null;
+            var table = scan.Table;
+            var startRow = scan.StartRow;
+            var stopRow = scan.StopRow;
+            var families = scan.Families;
+            var filters = scan.Filters;
             do
             {
                 rpc = rpc == null
-                    ? new ScanCall(table, families, startRow, stopRow)
-                    : new ScanCall(table, families, rpc.RegionStop, stopRow);
+                    ? new ScanCall(table, families, startRow, stopRow) {Filters = filters}
+                    : new ScanCall(table, families, rpc.Info.StopKey, stopRow) {Filters = filters};
                 scanres = await SendRPCToRegion<ScanResponse>(rpc);
                 if (scanres?.Results?.Any() != true) break;
                 results.AddRange(scanres.Results);
@@ -118,8 +120,8 @@ namespace HBaseNet
 
                 rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
                 scanres = await SendRPCToRegion<ScanResponse>(rpc);
-                if (rpc.RegionStop?.Length == 0
-                    || stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.RegionStop) <= 0)
+                if (rpc.Info.StopKey?.Length == 0
+                    || stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.Info.StopKey) <= 0)
                     return results;
             } while (true);
 
@@ -154,8 +156,7 @@ namespace HBaseNet
                 }
             }
 
-            rpc.SetRegion(reg.RegionName, reg.StopKey);
-
+            rpc.Info = reg;
             client.QueueRPC(rpc);
             return client;
         }
@@ -186,10 +187,13 @@ namespace HBaseNet
             }
 
             var metaKey = RegionInfo.CreateRegionSearchKey(table, key);
-            var rpc = GetCall.CreateGetBefore(MetaTableName, metaKey, InfoFamily);
-            rpc.SetRegion(MetaRegionInfo.RegionName, MetaRegionInfo.StopKey);
-            var resp = await _metaClient.SendRPC<GetResponse>(rpc);
-            var discover = await DiscoverRegion(resp);
+            var rpc = GetCall.CreateGetBefore(MetaTableName, metaKey);
+            rpc.Families = InfoFamily;
+            rpc.Info = MetaRegionInfo;
+            if (!await _metaClient.SendRPC(rpc)) return null;
+            var resp = await _metaClient.ReceiveRPC();
+            if (!(resp.Msg is GetResponse response)) return null;
+            var discover = await DiscoverRegion(response);
             if (discover?.client != null)
             {
                 _logger.LogInformation(
@@ -217,12 +221,13 @@ namespace HBaseNet
             if (idxColon < 1) return null;
             var host = serverData[..idxColon].ToUtf8String();
             if (!ushort.TryParse(serverData[(idxColon + 1)..].ToUtf8String(), out var port)) return null;
-            var client = new RegionClient(host, port);
+            var client = await new RegionClient(host, port).Build();
+            if (client == null) return null;
             AddRegionToCache(reg, client);
             return await Task.FromResult((client, reg));
         }
 
-        private void AddRegionToCache(RegionInfo reg,RegionClient client)
+        private void AddRegionToCache(RegionInfo reg, RegionClient client)
         {
             KeyRegionCache2.TryAdd(reg.RegionName, reg);
             RegionClientCache.TryAdd(reg, client);
@@ -232,7 +237,9 @@ namespace HBaseNet
         {
             var zkc = _zkHelper.CreateClient(_zkquorum, TimeSpan.FromSeconds(30));
             var meta = await _zkHelper.LocateResource(zkc, ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom);
-            _metaClient = new RegionClient(meta.Server.HostName, (ushort) meta.Server.Port);
+            await zkc.closeAsync();
+            
+            _metaClient = await new RegionClient(meta.Server.HostName, (ushort) meta.Server.Port).Build();
             if (_metaClient != null)
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
         }
@@ -253,6 +260,25 @@ namespace HBaseNet
             return cacheKey[table.Length] == ConstByte.Comma;
         }
 
+        private async Task ReestablishRegion(RegionInfo reg)
+        {
+            if (reg != MetaRegionInfo)
+            {
+                RegionClientCache.TryRemove(reg, out _);
+            }
+
+            while (true)
+            {
+                if (reg == MetaRegionInfo)
+                {
+                    await LocateMeta();
+                }
+                else
+                {
+                    await LocateRegion(reg.Table, reg.StartKey);
+                }
+            }
+        }
 
         private RegionInfo GetRegionInfo(byte[] table, byte[] key)
         {

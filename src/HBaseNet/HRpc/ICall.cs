@@ -1,6 +1,7 @@
 using System;
 using Google.Protobuf;
 using Pb;
+using RegionInfo = HBaseNet.Region.RegionInfo;
 
 namespace HBaseNet.HRpc
 {
@@ -9,9 +10,8 @@ namespace HBaseNet.HRpc
         byte[] Table { get; }
         byte[] Key { get; }
         string Name { get; }
-        byte[] RegionName { get; }
-        void SetRegion(byte[] region, byte[] regionStop);
+        RegionInfo Info { get; set; }
         byte[] Serialize();
-        IMessage ResponseParseFrom(byte[] bts);
+        IMessage ParseResponseFrom(byte[] bts);
     }
 }

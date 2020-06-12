@@ -61,8 +61,8 @@ namespace HBaseNet.Console
             sth.Restart();
             await sto.ExecScan();
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
-            
-            // await sto.ExecScanAndDelete();
+            //await sto.ExecScanAndDelete();
+            // Console.ReadLine();
         }
     }
 }

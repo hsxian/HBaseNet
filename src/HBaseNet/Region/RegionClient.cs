@@ -5,7 +5,6 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using HBaseNet.HRpc;
@@ -17,14 +16,16 @@ namespace HBaseNet.Region
 {
     public class RegionClient
     {
-        private uint Id { get; set; }
-        public string Host { get; private set; }
-        public ushort Port { get; private set; }
+        private uint _callId;
+        public string Host { get; }
+        public ushort Port { get; }
         private NetworkStream Conn { get; set; }
-        private int TimeOut { get; set; }
-        private readonly ConcurrentQueue<ICall> _rpcQueue;
-        private readonly ConcurrentQueue<RPCResult> _rpcResultQueue;
+        private int TimeOut { get; }
         private readonly ILogger<RegionClient> _logger;
+        private ConcurrentDictionary<uint, ICall> _idRpcDict;
+        private ConcurrentQueue<ICall> _rpcQueue;
+        private ConcurrentQueue<RPCResult> _resultQueue;
+        private Guid _guid;
 
         public RegionClient(string host, ushort port)
         {
@@ -32,69 +33,63 @@ namespace HBaseNet.Region
             Host = host;
             Port = port;
             TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
-            var tcp = new TcpClient();
+        }
 
-            var ipAddress = IPAddress.TryParse(host, out var ip)
+        public async Task<RegionClient> Build()
+        {
+            var tcp = new TcpClient();
+            var ipAddress = IPAddress.TryParse(Host, out var ip)
                 ? ip
-                : Dns.GetHostEntry(host).AddressList.FirstOrDefault();
-            tcp.Connect(ipAddress, port);
+                : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
+            await tcp.ConnectAsync(ipAddress, Port);
             Conn = tcp.GetStream();
             Conn.ReadTimeout = TimeOut;
             Conn.WriteTimeout = TimeOut;
             _rpcQueue = new ConcurrentQueue<ICall>();
-            _rpcResultQueue = new ConcurrentQueue<RPCResult>();
-            _ = SendHello();
-            ProcessRPCQueue();
+            _resultQueue = new ConcurrentQueue<RPCResult>();
+            _idRpcDict = new ConcurrentDictionary<uint, ICall>();
+            if (!await SendHello()) return null;
+            _guid = Guid.NewGuid();
+            ProcessRPCs();
+            return this;
         }
 
-        private void ProcessRPCQueue()
+        private void ProcessRPCs()
         {
             Task.Factory.StartNew(async () =>
             {
                 while (true)
                 {
-                    if (_rpcQueue.Count > 0)
+                    if (_rpcQueue.Count < 1)
                     {
-                        while (_rpcQueue.TryDequeue(out var rpc))
-                        {
-                            var result = new RPCResult();
-                            try
-                            {
-                                result.Msg = await SendRPC<IMessage>(rpc);
-                            }
-                            catch (Exception e)
-                            {
-                                result.Error = e;
-                                _logger.LogError("SendRPC in RPCQueue", e);
-                            }
-                            finally
-                            {
-                                _rpcResultQueue.Enqueue(result);
-                            }
-                        }
+                        await Task.Delay(10);
                     }
                     else
                     {
-                        await Task.Delay(1);
+                        while (_rpcQueue.TryDequeue(out var rpc))
+                        {
+                            await SendRPC(rpc);
+                            var res = await ReceiveRPC();
+                            _resultQueue.Enqueue(res);
+                        }
                     }
                 }
             }, TaskCreationOptions.LongRunning);
         }
 
-        public void QueueRPC(ICall rpc)
-        {
-            _rpcQueue.Enqueue(rpc);
-        }
-
         public async Task<RPCResult> GetRPCResult()
         {
-            while (_rpcResultQueue.Count < 1) await Task.Delay(10);
             RPCResult result = null;
             do
             {
-                _rpcResultQueue.TryDequeue(out var rpcResult);
-                result = rpcResult;
-            } while (result == null);
+                if (_resultQueue.TryDequeue(out var res))
+                {
+                    result = res;
+                    break;
+                }
+
+                await Task.Delay(1);
+            } while (true);
 
             return result;
         }
@@ -127,13 +122,13 @@ namespace HBaseNet.Region
             }
             catch (Exception e) when (e is IOException io)
             {
-                _logger.LogError($"error when write to rpc conn: ", e);
+                _logger.LogError(e, $"error when write to rpc conn: ");
             }
 
             return true;
         }
 
-        private async Task<bool> ReadFully(byte[] buf)
+        private async Task<Exception> ReadFully(byte[] buf)
         {
             var rs = 0;
             try
@@ -142,25 +137,33 @@ namespace HBaseNet.Region
             }
             catch (Exception e)
             {
-                _logger.LogError($"error when read fully from rpc conn: ", e);
+                _logger.LogError(e, $"error when read fully from rpc conn: ");
+                return e;
             }
 
-            return rs > 0;
+            return null;
         }
 
-        public async Task<T> SendRPC<T>(ICall rpc) where T : class, IMessage
+        public void QueueRPC(ICall rpc)
         {
-            // await _sendRPCSemaphore.WaitAsync();
-            Id++;
+            _rpcQueue.Enqueue(rpc);
+        }
+
+        public async Task<bool> SendRPC(ICall rpc)
+        {
+            _callId++;
             var reqHeader = new RequestHeader
             {
-                CallId = Id,
+                CallId = _callId,
                 MethodName = rpc.Name,
                 RequestParam = true
             };
             var payload = rpc.Serialize();
+
             var payloadLen = ProtoBufEx.EncodeVarint((ulong) payload.Length);
+
             var headerData = reqHeader.ToByteArray();
+
             var buf = new byte[4 + 1 + headerData.Length + payloadLen.Length + payload.Length];
             BinaryPrimitives.WriteUInt32BigEndian(buf, (uint) (buf.Length - 4));
             buf[4] = (byte) headerData.Length;
@@ -168,48 +171,68 @@ namespace HBaseNet.Region
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
 
-            await Write(buf);
-            var sz = new byte[4];
-            await ReadFully(sz);
+            var w = await Write(buf);
+            return w && _idRpcDict.TryAdd(_callId, rpc);
+        }
 
-            buf = new byte[BinaryPrimitives.ReadInt32BigEndian(sz)];
-            await ReadFully(buf);
-            var (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
+        public async Task<RPCResult> ReceiveRPC()
+        {
+            var result = new RPCResult();
+            var sz = new byte[4];
+            result.Error = await ReadFully(sz);
+            if (result.Error != null) return result;
+
+            var buf = new byte[BinaryPrimitives.ReadInt32BigEndian(sz)];
+            result.Error = await ReadFully(buf);
+            if (result.Error != null) return result;
+
             var resp = new ResponseHeader();
-            buf = buf[(int) nb..];
-            resp.MergeFrom(buf[..(int) respLen]);
-            buf = buf[(int) respLen..];
-            if (resp.Exception != null)
+            var (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
+            buf = buf[nb..];
+            try
             {
-                _logger.LogError($"Failed to deserialize the response header:", resp.Exception);
+                resp.MergeFrom(buf[..(int) respLen]);
+                buf = buf[(int) respLen..];
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to deserialize the response header from length :{respLen}.");
+                result.Error = e;
+
+                return result;
             }
 
             if (resp.CallId == 0)
             {
-                _logger.LogError("Response doesn't have a call ID!");
-                return null;
+                const string msg = "Response doesn't have a call ID!";
+                _logger.LogError(msg);
+                result.Error = new Exception(msg);
+                return result;
             }
 
-            if (resp.CallId != Id)
+            if (_idRpcDict.TryRemove(resp.CallId, out var rpc) == false)
             {
-                _logger.LogError($"Not the callId we expected: {reqHeader.CallId}");
-                _logger.LogError(
-                    $"remote exception :{resp.Exception}");
-                return null;
+                var msg = $"Not the callId we expected: {resp.CallId}";
+                _logger.LogError(msg);
+                result.Error = new Exception(msg);
+                return result;
             }
+
 
             if (resp.Exception != null)
             {
-                _logger.LogError(
-                    $"remote exception :\r\n{resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}");
-                return null;
+                var errStr =
+                    $"HBase java exception: {resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}";
+                _logger.LogError(errStr);
+                result.Error = new Exception(errStr);
             }
-
-            (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
-            buf = buf[(int) nb..];
-            var rpcResp = rpc.ResponseParseFrom(buf);
-            buf = buf[(int) respLen..];
-            var result = rpcResp as T;
+            else
+            {
+                (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
+                buf = buf[(int) nb..];
+                result.Msg = rpc.ParseResponseFrom(buf);
+                buf = buf[(int) respLen..];
+            }
             return result;
         }
     }
