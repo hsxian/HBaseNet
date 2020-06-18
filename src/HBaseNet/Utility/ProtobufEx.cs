@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 
@@ -23,6 +24,7 @@ namespace HBaseNet.Utility
         /// <returns></returns>
         public static (ulong value, int length) DecodeVarint(byte[] buf)
         {
+            if (buf?.Any() != true) return (0, 0);
             using var ms = new CodedInputStream(buf);
             var v = ms.ReadUInt64();
             var nb = CodedOutputStream.ComputeUInt64Size(v);

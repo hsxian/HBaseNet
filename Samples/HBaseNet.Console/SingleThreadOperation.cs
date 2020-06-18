@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
+using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -29,14 +30,15 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
+                var rs = await _client.SendRPC<MultiResponse>(new MutateCall(Program.Table, rowKey, Program.Values,
+                    MutationProto.Types.MutationType.Put));
             }
         }
 
         public async Task ExecScan()
         {
             var scanResults = await _client.Scan(
-                new ScanCall(Program.Table, Program.Family, "0".ToUtf8Bytes(), "5".ToUtf8Bytes())
+                new ScanCall(Program.Table, Program.Family, "0".ToUtf8Bytes(), "9".ToUtf8Bytes())
                     {Families = Program.Family});
             Log.Information($"scan result count:{scanResults.Count}");
         }
@@ -49,10 +51,8 @@ namespace HBaseNet.Console
             foreach (var result in scanResults)
             {
                 var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).Single();
-                var getResult = await _client.Get(new GetCall(Program.Table, rowKey));
-                if (getResult?.Result.Cell.Any(t => t.Row.ToStringUtf8() == rowKey) != true)
-                    throw new CheckoutException();
-                var delResult = await _client.Delete(new MutateCall(Program.Table, rowKey, null));
+                var delResult = await _client.SendRPC<MutateResponse>(new MutateCall(Program.Table, rowKey, null,
+                    MutationProto.Types.MutationType.Delete));
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
         }

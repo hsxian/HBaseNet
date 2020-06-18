@@ -23,7 +23,8 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
+                var rs = _client.SendRPC<MutateResponse>(new MutateCall(Program.Table, rowKey, Program.Values,
+                    MutationProto.Types.MutationType.Put));
                 tasks.Add(rs);
             }
 

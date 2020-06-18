@@ -9,6 +9,8 @@ namespace HBaseNet.HRpc
 {
     public abstract class BaseCall : ICall
     {
+        public uint CallId { get; set; }
+        public uint RetryCount { get; set; }
         public byte[] Table { get; protected set; }
         public byte[] Key { get; protected set; }
         public abstract string Name { get; }

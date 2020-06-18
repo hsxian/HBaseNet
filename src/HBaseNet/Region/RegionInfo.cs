@@ -1,6 +1,7 @@
 using System;
 using System.Buffers.Binary;
 using System.Linq;
+using System.Threading;
 using HBaseNet.Const;
 using HBaseNet.Utility;
 using Pb;
@@ -18,7 +19,12 @@ namespace HBaseNet.Region
 
         public byte[] StartKey { get; set; }
         public byte[] StopKey { get; set; }
-        public bool IsAvailable { get; set; }
+        public CancellationTokenSource CancellationSource { get; }
+
+        public RegionInfo()
+        {
+            CancellationSource = new CancellationTokenSource();
+        }
 
         public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)
         {

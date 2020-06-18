@@ -1,11 +1,7 @@
 ﻿using System.Collections.Generic;
-using System.ComponentModel.Design;
 using System.Diagnostics;
-using System.Linq;
 using System.Threading.Tasks;
-using System.Windows.Markup;
 using HBaseNet.Utility;
-using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -48,10 +44,7 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
             if (await sto.CheckTable() == false) return;
-            var putCount = 10;
-            sth.Restart();
-            await sto.ExecPut(putCount);
-            Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");
+            var putCount = 10000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
@@ -59,10 +52,15 @@ namespace HBaseNet.Console
             Log.Logger.Information($"exec multi thread put ,count: {putCount},take :{sth.Elapsed}");
 
             sth.Restart();
+            // await sto.ExecPut(putCount);
+            // Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");
+
+
+            sth.Restart();
             await sto.ExecScan();
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
-            //await sto.ExecScanAndDelete();
-            // Console.ReadLine();
+            // await sto.ExecScanAndDelete();
+            Console.ReadLine();
         }
     }
 }

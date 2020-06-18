@@ -5,52 +5,71 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using HBaseNet.HRpc;
+using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
 using Microsoft.Extensions.Logging;
 using Pb;
 
 namespace HBaseNet.Region
 {
-    public class RegionClient
+    public class RegionClient : IDisposable
     {
-        private uint _callId;
+        private int _callId;
         public string Host { get; }
         public ushort Port { get; }
+        public RegionType Type { get; }
         private NetworkStream Conn { get; set; }
         private int TimeOut { get; }
         private readonly ILogger<RegionClient> _logger;
-        private ConcurrentDictionary<uint, ICall> _idRpcDict;
-        private ConcurrentQueue<ICall> _rpcQueue;
-        private ConcurrentQueue<RPCResult> _resultQueue;
-        private Guid _guid;
+        private ConcurrentDictionary<uint, RPCResult> _idResultDict;
+        private ConcurrentDictionary<uint, ICall> _idRPCDict;
+        private BlockingCollection<ICall> _rpcQueue;
+        private bool _isWorking;
+        public int CallQueueSize { get; set; } = 150;
 
-        public RegionClient(string host, ushort port)
+        public RegionClient(string host, ushort port, RegionType type)
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<RegionClient>();
             Host = host;
             Port = port;
+            Type = type;
             TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
+        }
+
+        private int GetNextCallId()
+        {
+            return Interlocked.Increment(ref _callId);
         }
 
         public async Task<RegionClient> Build()
         {
-            var tcp = new TcpClient();
-            var ipAddress = IPAddress.TryParse(Host, out var ip)
-                ? ip
-                : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
-            await tcp.ConnectAsync(ipAddress, Port);
-            Conn = tcp.GetStream();
-            Conn.ReadTimeout = TimeOut;
-            Conn.WriteTimeout = TimeOut;
-            _rpcQueue = new ConcurrentQueue<ICall>();
-            _resultQueue = new ConcurrentQueue<RPCResult>();
-            _idRpcDict = new ConcurrentDictionary<uint, ICall>();
-            if (!await SendHello()) return null;
-            _guid = Guid.NewGuid();
-            ProcessRPCs();
+            try
+            {
+                var ipAddress = IPAddress.TryParse(Host, out var ip)
+                    ? ip
+                    : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
+                var skt = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                await skt.ConnectAsync(ipAddress, Port);
+                Conn = new NetworkStream(skt, FileAccess.ReadWrite) {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
+                _rpcQueue = new BlockingCollection<ICall>(CallQueueSize);
+                _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
+                _idRPCDict = new ConcurrentDictionary<uint, ICall>();
+                _isWorking = true;
+                if (false == await SendHello(Type)) return null;
+                ProcessRPCs();
+                ReceiveRPCs();
+                _logger.LogInformation($"connect to the RegionServer at {Host}:{Port}");
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"failed to connect to the RegionServer at {Host}:{Port}");
+                return null;
+            }
+
             return this;
         }
 
@@ -58,43 +77,54 @@ namespace HBaseNet.Region
         {
             Task.Factory.StartNew(async () =>
             {
-                while (true)
+                while (_isWorking)
                 {
-                    if (_rpcQueue.Count < 1)
+                    await Task.Delay(1);
+
+                    while (_rpcQueue.TryTake(out var rpc))
                     {
-                        await Task.Delay(10);
-                    }
-                    else
-                    {
-                        while (_rpcQueue.TryDequeue(out var rpc))
-                        {
-                            await SendRPC(rpc);
-                            var res = await ReceiveRPC();
-                            _resultQueue.Enqueue(res);
-                        }
+                        //TODO:CancellationToken
+                        var token = new CancellationToken();
+                        await SendRPC(rpc, token);
                     }
                 }
             }, TaskCreationOptions.LongRunning);
         }
 
-        public async Task<RPCResult> GetRPCResult()
+        private void ReceiveRPCs()
+        {
+            Task.Factory.StartNew(async () =>
+            {
+                while (_isWorking)
+                {
+                    var token = new CancellationToken();
+                    var res = await ReceiveRPC(token);
+                    while (_idResultDict.ContainsKey(res.CallId) == false)
+                    {
+                        _idResultDict.TryAdd(res.CallId, res);
+                    }
+                }
+            }, TaskCreationOptions.LongRunning);
+        }
+
+        public async Task<RPCResult> GetRPCResult(uint callId)
         {
             RPCResult result = null;
             do
             {
-                if (_resultQueue.TryDequeue(out var res))
+                if (_idResultDict.TryRemove(callId, out var res))
                 {
                     result = res;
                     break;
                 }
 
                 await Task.Delay(1);
-            } while (true);
+            } while (_isWorking);
 
             return result;
         }
 
-        private Task<bool> SendHello()
+        private Task<bool> SendHello(RegionType type)
         {
             var connHeader = new ConnectionHeader
             {
@@ -102,7 +132,7 @@ namespace HBaseNet.Region
                 {
                     EffectiveUser = "gopher"
                 },
-                ServiceName = "ClientService"
+                ServiceName = type.ToString()
             };
             var data = connHeader.ToByteArray();
             var header = "HBas\x00\x50".ToUtf8Bytes(); // \x50 = Simple Auth.
@@ -111,14 +141,14 @@ namespace HBaseNet.Region
             var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint) data.Length));
             dataLenBig.CopyTo(buf, 6);
             data.CopyTo(buf, header.Length + 4);
-            return Write(buf);
+            return Write(buf, new CancellationToken());
         }
 
-        private async Task<bool> Write(byte[] buf)
+        private async Task<bool> Write(byte[] buf, CancellationToken token)
         {
             try
             {
-                await Conn.WriteAsync(buf);
+                await Conn.WriteAsync(buf, token);
             }
             catch (Exception e) when (e is IOException io)
             {
@@ -128,12 +158,12 @@ namespace HBaseNet.Region
             return true;
         }
 
-        private async Task<Exception> ReadFully(byte[] buf)
+        private async Task<Exception> ReadFully(byte[] buf, CancellationToken token)
         {
             var rs = 0;
             try
             {
-                rs = await Conn.ReadAsync(buf);
+                rs = await Conn.ReadAsync(buf, token);
             }
             catch (Exception e)
             {
@@ -144,20 +174,29 @@ namespace HBaseNet.Region
             return null;
         }
 
-        public void QueueRPC(ICall rpc)
+        public async Task QueueRPC(ICall rpc)
         {
-            _rpcQueue.Enqueue(rpc);
+            rpc.CallId = (uint) GetNextCallId();
+            while (_rpcQueue.TryAdd(rpc) == false)
+            {
+                await Task.Delay(1);
+            }
         }
 
-        public async Task<bool> SendRPC(ICall rpc)
+        private async Task<bool> SendRPC(ICall rpc, CancellationToken token)
         {
-            _callId++;
             var reqHeader = new RequestHeader
             {
-                CallId = _callId,
+                CallId = rpc.CallId,
                 MethodName = rpc.Name,
                 RequestParam = true
             };
+
+            while (_idRPCDict.ContainsKey(rpc.CallId) == false)
+            {
+                _idRPCDict.TryAdd(rpc.CallId, rpc);
+            }
+
             var payload = rpc.Serialize();
 
             var payloadLen = ProtoBufEx.EncodeVarint((ulong) payload.Length);
@@ -171,19 +210,19 @@ namespace HBaseNet.Region
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
 
-            var w = await Write(buf);
-            return w && _idRpcDict.TryAdd(_callId, rpc);
+            var w = await Write(buf, token);
+            return w;
         }
 
-        public async Task<RPCResult> ReceiveRPC()
+        public async Task<RPCResult> ReceiveRPC(CancellationToken token)
         {
             var result = new RPCResult();
             var sz = new byte[4];
-            result.Error = await ReadFully(sz);
+            result.Error = await ReadFully(sz, token);
             if (result.Error != null) return result;
 
             var buf = new byte[BinaryPrimitives.ReadInt32BigEndian(sz)];
-            result.Error = await ReadFully(buf);
+            result.Error = await ReadFully(buf, token);
             if (result.Error != null) return result;
 
             var resp = new ResponseHeader();
@@ -198,7 +237,6 @@ namespace HBaseNet.Region
             {
                 _logger.LogError(e, $"Failed to deserialize the response header from length :{respLen}.");
                 result.Error = e;
-
                 return result;
             }
 
@@ -210,21 +248,42 @@ namespace HBaseNet.Region
                 return result;
             }
 
-            if (_idRpcDict.TryRemove(resp.CallId, out var rpc) == false)
+
+            if (_idRPCDict.ContainsKey(resp.CallId) == false)
             {
-                var msg = $"Not the callId we expected: {resp.CallId}";
+                var msg = $"Not the callId we expected: {resp.CallId}.{string.Join(",", _idRPCDict.Keys)}";
                 _logger.LogError(msg);
                 result.Error = new Exception(msg);
                 return result;
             }
 
+            ICall rpc;
+            do
+            {
+                _idRPCDict.TryRemove(resp.CallId, out var p);
+                rpc = p;
+            } while (rpc == null);
+
 
             if (resp.Exception != null)
             {
                 var errStr =
-                    $"HBase java exception: {resp.Exception.ExceptionClassName}:\n{resp.Exception.StackTrace}";
-                _logger.LogError(errStr);
-                result.Error = new Exception(errStr);
+                    $"HBase java exception: {resp.Exception.ExceptionClassName}:{resp.Exception.StackTrace}";
+
+                if (ExceptionMap.IsMatch<CallQueueTooBigException>(resp.Exception.ExceptionClassName))
+                {
+                    result.Error = new CallQueueTooBigException();
+                    _logger.LogWarning(
+                        $"{errStr}.\n\tThe rpc will be retried {rpc.RetryCount + 1}th, and you can reduce the {nameof(CallQueueSize)} configuration to reduce the exception.");
+                }
+                else if (ExceptionMap.IsMatch<RetryableException>(resp.Exception.ExceptionClassName))
+                {
+                    result.Error = new RetryableException(errStr);
+                }
+                else
+                {
+                    _logger.LogError(errStr);
+                }
             }
             else
             {
@@ -233,7 +292,15 @@ namespace HBaseNet.Region
                 result.Msg = rpc.ParseResponseFrom(buf);
                 buf = buf[(int) respLen..];
             }
+
+
+            result.CallId = resp.CallId;
             return result;
+        }
+
+        public void Dispose()
+        {
+            _isWorking = false;
         }
     }
 }

@@ -10,14 +10,16 @@ namespace HBaseNet.HRpc
 {
     public class MutateCall : BaseCall
     {
-        public IDictionary<string, IDictionary<string, byte[]>> Values { get; set; }
-        public MutationProto.Types.MutationType MutationType { get; set; }
-        
-        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values)
+        public IDictionary<string, IDictionary<string, byte[]>> Values { get; }
+        public MutationProto.Types.MutationType MutationType { get; }
+
+        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
+            MutationProto.Types.MutationType mutationType)
         {
             Table = table.ToUtf8Bytes();
             Key = key.ToUtf8Bytes();
             Values = values;
+            MutationType = mutationType;
         }
 
         public override string Name => "Mutate";
