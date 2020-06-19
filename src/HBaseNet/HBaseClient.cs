@@ -343,7 +343,7 @@ namespace HBaseNet
             await _metaClient.QueueRPC(getCall);
             var resp = await _metaClient.GetRPCResult(getCall.CallId);
 
-            if (resp.Msg is GetResponse response)
+            if (resp?.Msg is GetResponse response)
             {
                 return ParseMetaTableResponse(response);
             }

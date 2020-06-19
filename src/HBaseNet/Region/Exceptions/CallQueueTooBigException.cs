@@ -4,5 +4,6 @@ namespace HBaseNet.Region.Exceptions
 {
     public class CallQueueTooBigException : Exception
     {
+         
     }
 }

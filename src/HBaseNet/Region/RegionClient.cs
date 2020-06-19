@@ -21,8 +21,9 @@ namespace HBaseNet.Region
         private int _callId;
         public string Host { get; }
         public ushort Port { get; }
-        public RegionType Type { get; }
-        private NetworkStream Conn { get; set; }
+        private RegionType Type { get; }
+        private NetworkStream _conn;
+        private Socket _socket;
         private int TimeOut { get; }
         private readonly ILogger<RegionClient> _logger;
         private ConcurrentDictionary<uint, RPCResult> _idResultDict;
@@ -52,9 +53,10 @@ namespace HBaseNet.Region
                 var ipAddress = IPAddress.TryParse(Host, out var ip)
                     ? ip
                     : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
-                var skt = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                await skt.ConnectAsync(ipAddress, Port);
-                Conn = new NetworkStream(skt, FileAccess.ReadWrite) {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
+                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+                await _socket.ConnectAsync(ipAddress, Port);
+                _conn = new NetworkStream(_socket, FileAccess.ReadWrite)
+                    {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
                 _rpcQueue = new BlockingCollection<ICall>(CallQueueSize);
                 _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
                 _idRPCDict = new ConcurrentDictionary<uint, ICall>();
@@ -99,6 +101,11 @@ namespace HBaseNet.Region
                 {
                     var token = new CancellationToken();
                     var res = await ReceiveRPC(token);
+                    if (res.CallId == 0)
+                    {
+                        await Task.Delay(1, token);
+                    }
+
                     while (_idResultDict.ContainsKey(res.CallId) == false)
                     {
                         _idResultDict.TryAdd(res.CallId, res);
@@ -148,11 +155,12 @@ namespace HBaseNet.Region
         {
             try
             {
-                await Conn.WriteAsync(buf, token);
+                await _conn.WriteAsync(buf, token);
             }
-            catch (Exception e) when (e is IOException io)
+            catch (Exception e) when (e is IOException)
             {
-                _logger.LogError(e, $"error when write to rpc conn: ");
+                _logger.LogError(e, $"error when write to rpc conn");
+                return false;
             }
 
             return true;
@@ -160,14 +168,17 @@ namespace HBaseNet.Region
 
         private async Task<Exception> ReadFully(byte[] buf, CancellationToken token)
         {
-            var rs = 0;
             try
             {
-                rs = await Conn.ReadAsync(buf, token);
+                var rs = await _conn.ReadAsync(buf, token);
+                if (rs == 0)
+                {
+                    return new IOException("io not anything");
+                }
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"error when read fully from rpc conn: ");
+                _logger.LogError(e, $"error when read fully from rpc conn");
                 return e;
             }
 
@@ -209,14 +220,14 @@ namespace HBaseNet.Region
             headerData.CopyTo(buf, 5);
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
-
-            var w = await Write(buf, token);
-            return w;
+            
+            return await Write(buf, token);
         }
 
-        public async Task<RPCResult> ReceiveRPC(CancellationToken token)
+        private async Task<RPCResult> ReceiveRPC(CancellationToken token)
         {
             var result = new RPCResult();
+            var sc = _socket;
             var sz = new byte[4];
             result.Error = await ReadFully(sz, token);
             if (result.Error != null) return result;
@@ -292,7 +303,6 @@ namespace HBaseNet.Region
                 result.Msg = rpc.ParseResponseFrom(buf);
                 buf = buf[(int) respLen..];
             }
-
 
             result.CallId = resp.CallId;
             return result;

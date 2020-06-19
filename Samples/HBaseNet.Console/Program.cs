@@ -44,7 +44,7 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
             if (await sto.CheckTable() == false) return;
-            var putCount = 10000;
+            const int putCount = 100;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
