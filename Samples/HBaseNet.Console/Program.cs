@@ -1,7 +1,9 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading.Tasks;
+using HBaseNet.HRpc;
 using HBaseNet.Utility;
+using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -40,6 +42,11 @@ namespace HBaseNet.Console
                     }
                 }
             };
+
+            // var admin = new HBaseClient(ZkQuorum, ClientType.AdminClient);
+            // var ct = await admin.SendRPC<CreateTableResponse>(new CreateTableCall(
+            //     DateTime.Now.Ticks.ToString().ToUtf8Bytes(),
+            //     new[] {"info"}));
             var client = new HBaseClient(ZkQuorum);
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
@@ -48,7 +55,7 @@ namespace HBaseNet.Console
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
-            await mto.ExecPut(putCount);
+            // await mto.ExecPut(putCount);
             Log.Logger.Information($"exec multi thread put ,count: {putCount},take :{sth.Elapsed}");
 
             sth.Restart();

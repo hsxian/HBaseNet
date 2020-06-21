@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace HBaseNet.Utility
 {
-    public class TaskEx
+    public static class TaskEx
     {
         public static async Task WaitOn(Func<bool> condition, int millisecondsCheck = 50,
             int millisecondsTimeout = 3000)

@@ -38,7 +38,7 @@ namespace HBaseNet.Console
         public async Task ExecScan()
         {
             var scanResults = await _client.Scan(
-                new ScanCall(Program.Table, Program.Family, "0".ToUtf8Bytes(), "9".ToUtf8Bytes())
+                new ScanCall(Program.Table, Program.Family, "1".ToUtf8Bytes(), "5".ToUtf8Bytes())
                     {Families = Program.Family});
             Log.Information($"scan result count:{scanResults.Count}");
         }
