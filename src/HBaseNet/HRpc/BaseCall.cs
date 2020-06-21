@@ -11,8 +11,8 @@ namespace HBaseNet.HRpc
     {
         public uint CallId { get; set; }
         public uint RetryCount { get; set; }
-        public byte[] Table { get; protected set; }
-        public byte[] Key { get; protected set; }
+        public byte[] Table { get; set; }
+        public byte[] Key { get; set; }
         public abstract string Name { get; }
         public RegionInfo Info { get; set; }
 

@@ -42,15 +42,16 @@ namespace HBaseNet.Console
                     }
                 }
             };
+            var ado = new AdminClientOperation();
+            await ado.ExecAll();
 
-            // var admin = new HBaseClient(ZkQuorum, ClientType.AdminClient);
-            // var ct = await admin.SendRPC<CreateTableResponse>(new CreateTableCall(
-            //     DateTime.Now.Ticks.ToString().ToUtf8Bytes(),
-            //     new[] {"info"}));
             var client = new HBaseClient(ZkQuorum);
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
             if (await sto.CheckTable() == false) return;
+
+            await sto.ExecCheckAndPut();
+
             const int putCount = 100;
 
             var mto = new MultiThreadOperation(client);

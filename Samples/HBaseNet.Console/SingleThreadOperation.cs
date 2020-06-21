@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.Design;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
@@ -30,7 +31,7 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = await _client.SendRPC<MultiResponse>(new MutateCall(Program.Table, rowKey, Program.Values,
+                var rs = await _client.SendRPC<MutateResponse>(new MutateCall(Program.Table, rowKey, Program.Values,
                     MutationProto.Types.MutationType.Put));
             }
         }
@@ -39,7 +40,7 @@ namespace HBaseNet.Console
         {
             var scanResults = await _client.Scan(
                 new ScanCall(Program.Table, Program.Family, "1".ToUtf8Bytes(), "5".ToUtf8Bytes())
-                    {Families = Program.Family});
+                { Families = Program.Family });
             Log.Information($"scan result count:{scanResults.Count}");
         }
 
@@ -55,6 +56,21 @@ namespace HBaseNet.Console
                     MutationProto.Types.MutationType.Delete));
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
+        }
+
+        public async Task ExecCheckAndPut()
+        {
+            var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
+            var put = new MutateCall(Program.Table, rowKey, Program.Values,
+                MutationProto.Types.MutationType.Put);
+
+            var rs = await _client.SendRPC<MutateResponse>(put);
+            if (rs?.Processed == true)
+            {
+                var resultF = await _client.CheckAndPut(put, "default", "key", "ex".ToUtf8Bytes(), new CancellationToken());
+            }
+            put.Key = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray()).ToUtf8Bytes();
+            var resultT = await _client.CheckAndPut(put, "default", "key", "ex".ToUtf8Bytes(), new CancellationToken());
         }
     }
 }

@@ -34,6 +34,7 @@ namespace HBaseNet
         private ConcurrentDictionary<RegionInfo, RegionClient> InfoRegionCache { get; }
         private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
         public TimeSpan BackoffStart { get; set; } = TimeSpan.FromMilliseconds(16);
+        public TimeSpan BackoffIncrease { get; set; } = TimeSpan.FromSeconds(5);
         public int RetryCount { get; set; } = 9;
         public ClientType Type { get; set; }
         public CancellationTokenSource DefaultCancellationSource { get; set; }
@@ -68,6 +69,14 @@ namespace HBaseNet
         {
             var get = new GetCall(table, "theKey");
             return null != await SendRPCToRegion<GetResponse>(get, token);
+        }
+
+        public async Task<bool> CheckAndPut(MutateCall put, string family, string qualifier,
+            byte[] expectedValue, CancellationToken token)
+        {
+            var cas = new CheckAndPutCall(put, family, qualifier, expectedValue);
+            var res = await SendRPCToRegion<MutateResponse>(cas, token);
+            return res != null && res.Processed;
         }
 
         public async Task<List<Result>> Scan(ScanCall scan, CancellationToken? token = null)
@@ -126,8 +135,9 @@ namespace HBaseNet
                 if (_adminClient == null)
                 {
                     await LocateMasterClient(token);
-                    return (_adminClient, _adminRegionInfo);
                 }
+
+                return (_adminClient, _adminRegionInfo);
             }
 
             var reg = GetInfoFromCache(rpc.Table, rpc.Key);
@@ -182,6 +192,12 @@ namespace HBaseNet
                     return res;
                 }
 
+                if (result.Msg != null)
+                {
+                    _logger.LogWarning(
+                        $"Generic result parameter types do not match, HBase return type is {result.Msg.Descriptor.FullName}, but here is given {typeof(TResponse).FullName}");
+                }
+
                 switch (result.Error)
                 {
                     case CallQueueTooBigException _:
@@ -190,6 +206,8 @@ namespace HBaseNet
                     case RetryableException _:
                         rpc.RetryCount++;
                         continue;
+                    default:
+                        return null;
                 }
             }
 
@@ -207,7 +225,7 @@ namespace HBaseNet
                 {
                     _logger.LogWarning(
                         $"Locate region failed in {i + 1}th，try the locate again after {backoff}.");
-                    backoff = await SleepAndIncreaseBackoff(backoff, token);
+                    backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                     continue;
                 }
 
@@ -217,7 +235,7 @@ namespace HBaseNet
                     return (cacheClient, reg);
                 }
 
-                var client = await new RegionClient(host, port, RegionType.ClientService).Build();
+                var client = await new RegionClient(host, port, RegionType.ClientService).Build(RetryCount, token);
                 return (client, reg);
             }
 
@@ -235,12 +253,6 @@ namespace HBaseNet
             return result;
         }
 
-        private async Task<TimeSpan> SleepAndIncreaseBackoff(TimeSpan backoff, CancellationToken token)
-        {
-            await Task.Delay(backoff, token);
-            return backoff < TimeSpan.FromSeconds(5) ? backoff * 2 : backoff + TimeSpan.FromSeconds(5);
-        }
-
         private async Task<TResult> TryLocateResource<TResult>(string resource,
             Func<byte[], TResult> getResultFunc, CancellationToken token)
         {
@@ -254,7 +266,7 @@ namespace HBaseNet
                 {
                     _logger.LogWarning(
                         $"Locate {resource} failed in {i + 1}th，try the locate again after {backoff}.");
-                    backoff = await SleepAndIncreaseBackoff(backoff, token);
+                    backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                 }
                 else
                 {
@@ -279,7 +291,7 @@ namespace HBaseNet
 
             _metaClient = await new RegionClient(meta.Server.HostName, (ushort) meta.Server.Port,
                     RegionType.ClientService)
-                .Build();
+                .Build(RetryCount, token);
             if (_metaClient != null)
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
             _isLocatingMetaClient = false;
@@ -295,7 +307,7 @@ namespace HBaseNet
 
             _adminClient = await new RegionClient(master.Master_.HostName, (ushort) master.Master_.Port,
                     RegionType.MasterService)
-                .Build();
+                .Build(RetryCount, token);
             if (_adminClient != null)
                 _logger.LogInformation($"Locate master server at : {_adminClient.Host}:{_adminClient.Port}");
             _isLocatingMasterClient = false;

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
@@ -11,6 +12,21 @@ namespace HBaseNet.HRpc
         public string[] Columns { get; }
         public override string Name => "CreateTable";
         public string[] SplitKeys { get; set; }
+
+        private readonly Dictionary<string, string> defaultAttributes = new Dictionary<string, string>
+        {
+            {"BLOOMFILTER", "ROW"},
+            {"VERSIONS", "3"},
+            {"IN_MEMORY", "false"},
+            {"KEEP_DELETED_CELLS", "FALSE"},
+            {"DATA_BLOCK_ENCODING", "FAST_DIFF"},
+            {"TTL", "2147483647"},
+            {"COMPRESSION", "NONE"},
+            {"MIN_VERSIONS", "0"},
+            {"BLOCKCACHE", "true"},
+            {"BLOCKSIZE", "65536"},
+            {"REPLICATION_SCOPE", "0"},
+        };
 
         public CreateTableCall(byte[] table, string[] columns)
         {
@@ -31,7 +47,8 @@ namespace HBaseNet.HRpc
                     }
                 }
             };
-            
+
+
             if (SplitKeys?.Any() == true)
             {
                 cTable.SplitKeys.AddRange(SplitKeys.Select(ByteString.CopyFromUtf8).ToArray());
@@ -39,11 +56,22 @@ namespace HBaseNet.HRpc
 
             if (Columns?.Any() == true)
             {
-                var cols = Columns.Select(t => new Pb.ColumnFamilySchema
+                var attrs = defaultAttributes.Select(t =>
+                    new BytesBytesPair
+                    {
+                        First = ByteString.CopyFromUtf8(t.Key),
+                        Second = ByteString.CopyFromUtf8(t.Value)
+                    }).ToArray();
+
+                foreach (var col in Columns)
                 {
-                    Name = ByteString.CopyFromUtf8(t)
-                }).ToArray();
-                cTable.TableSchema.ColumnFamilies.AddRange(cols);
+                    var cfs = new ColumnFamilySchema
+                    {
+                        Name = ByteString.CopyFromUtf8(col),
+                    };
+                    cfs.Attributes.AddRange(attrs);
+                    cTable.TableSchema.ColumnFamilies.Add(cfs);
+                }
             }
 
             return cTable.ToByteArray();

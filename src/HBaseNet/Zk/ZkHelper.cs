@@ -31,7 +31,7 @@ namespace HBaseNet.Zk
             {
                 data = await zk.getDataAsync(resource);
             }
-            catch (KeeperException.ConnectionLossException e)
+            catch (Exception e)
             {
                 _logger.LogError(e.Message);
                 return result;
@@ -53,7 +53,7 @@ namespace HBaseNet.Zk
         public ZooKeeper CreateClient(string connectString, TimeSpan timeout, Watcher watcher = null,
             bool canBeReadOnly = false)
         {
-            var client = new ZooKeeper(connectString, (int) timeout.TotalMilliseconds, watcher ?? new ZkLogWatcher(),
+            var client = new ZooKeeper(connectString, (int)timeout.TotalMilliseconds, watcher ?? new ZkLogWatcher(),
                 canBeReadOnly);
 
             return client;

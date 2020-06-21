@@ -38,7 +38,7 @@ namespace HBaseNet.Region
             Host = host;
             Port = port;
             Type = type;
-            TimeOut = (int) TimeSpan.FromSeconds(30).TotalMilliseconds;
+            TimeOut = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
         }
 
         private int GetNextCallId()
@@ -46,33 +46,45 @@ namespace HBaseNet.Region
             return Interlocked.Increment(ref _callId);
         }
 
-        public async Task<RegionClient> Build()
+        private async Task TryConn(int retryCount, CancellationToken token)
         {
-            try
+            var ipAddress = IPAddress.TryParse(Host, out var ip)
+                ? ip
+                : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
+            var backoff = TimeSpan.FromMilliseconds(100);
+            for (var i = 0; i < retryCount && token.IsCancellationRequested == false; i++)
             {
-                var ipAddress = IPAddress.TryParse(Host, out var ip)
-                    ? ip
-                    : (await Dns.GetHostEntryAsync(Host)).AddressList.FirstOrDefault();
-                _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-                await _socket.ConnectAsync(ipAddress, Port);
-                _conn = new NetworkStream(_socket, FileAccess.ReadWrite)
-                    {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
-                _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
-                _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
-                _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
-                _defaultCancellationSource = new CancellationTokenSource();
-                if (false == await SendHello(Type)) return null;
-                ProcessRPCs();
-                ReceiveRPCs();
-                ProcessOtherSituation();
-                _logger.LogInformation($"connect to the RegionServer at {Host}:{Port}");
+                try
+                {
+                    await _socket.ConnectAsync(ipAddress, Port);
+                    _conn = new NetworkStream(_socket, FileAccess.ReadWrite)
+                    { ReadTimeout = TimeOut, WriteTimeout = TimeOut };
+                    _logger.LogInformation($"connect to the RegionServer at {Host}:{Port}");
+                    return;
+                }
+                catch (Exception e)
+                {
+                    _logger.LogWarning(
+                        $"Connect RegionServer({Host}:{Port}) failed in {i + 1}th，try the locate again after {backoff}.\n{e}");
+                    backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, TimeSpan.FromSeconds(5), token);
+                }
             }
-            catch (Exception e)
-            {
-                _logger.LogError(e, $"failed to connect to the RegionServer at {Host}:{Port}");
-                return null;
-            }
+            _logger.LogError($"Connect RegionServer({Host}:{Port}) failed.");
+        }
 
+        public async Task<RegionClient> Build(int retryCount, CancellationToken token)
+        {
+            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            await TryConn(retryCount, token);
+            if (_conn == null) return null;
+            _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
+            _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
+            _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
+            _defaultCancellationSource = new CancellationTokenSource();
+            if (false == await SendHello(Type)) return null;
+            ProcessRPCs();
+            ReceiveRPCs();
+            ProcessOtherSituation();
             return this;
         }
 
@@ -155,7 +167,7 @@ namespace HBaseNet.Region
             var header = "HBas\x00\x50".ToUtf8Bytes(); // \x50 = Simple Auth.
             var buf = new byte[header.Length + 4 + data.Length];
             header.CopyTo(buf, 0);
-            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint) data.Length));
+            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint)data.Length));
             dataLenBig.CopyTo(buf, 6);
             data.CopyTo(buf, header.Length + 4);
             return Write(buf, new CancellationToken());
@@ -197,7 +209,7 @@ namespace HBaseNet.Region
 
         public async Task QueueRPC(ICall rpc)
         {
-            rpc.CallId = (uint) GetNextCallId();
+            rpc.CallId = (uint)GetNextCallId();
             var send = new RPCSend
             {
                 RPC = rpc
@@ -226,13 +238,13 @@ namespace HBaseNet.Region
 
             var payload = send.RPC.Serialize();
 
-            var payloadLen = ProtoBufEx.EncodeVarint((ulong) payload.Length);
+            var payloadLen = ProtoBufEx.EncodeVarint((ulong)payload.Length);
 
             var headerData = reqHeader.ToByteArray();
 
             var buf = new byte[4 + 1 + headerData.Length + payloadLen.Length + payload.Length];
-            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint) (buf.Length - 4));
-            buf[4] = (byte) headerData.Length;
+            BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)(buf.Length - 4));
+            buf[4] = (byte)headerData.Length;
             headerData.CopyTo(buf, 5);
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
@@ -243,7 +255,6 @@ namespace HBaseNet.Region
         private async Task<RPCResult> ReceiveRPC(CancellationToken token)
         {
             var result = new RPCResult();
-            var sc = _socket;
             var sz = new byte[4];
             result.Error = await ReadFully(sz, token);
             if (result.Error != null) return result;
@@ -257,8 +268,8 @@ namespace HBaseNet.Region
             buf = buf[nb..];
             try
             {
-                resp.MergeFrom(buf[..(int) respLen]);
-                buf = buf[(int) respLen..];
+                resp.MergeFrom(buf[..(int)respLen]);
+                buf = buf[(int)respLen..];
             }
             catch (Exception e)
             {
@@ -299,9 +310,9 @@ namespace HBaseNet.Region
             else
             {
                 (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
-                buf = buf[(int) nb..];
+                buf = buf[(int)nb..];
                 result.Msg = rpc.ParseResponseFrom(buf);
-                buf = buf[(int) respLen..];
+                buf = buf[(int)respLen..];
             }
 
             result.CallId = resp.CallId;
@@ -325,6 +336,7 @@ namespace HBaseNet.Region
             }
             else
             {
+                result.Error = new Exception(errStr);
                 _logger.LogError(errStr);
             }
         }

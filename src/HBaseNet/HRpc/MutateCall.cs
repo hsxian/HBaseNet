@@ -24,7 +24,7 @@ namespace HBaseNet.HRpc
 
         public override string Name => "Mutate";
 
-        public override byte[] Serialize()
+        public MutateRequest SerializeToProto()
         {
             var result = new MutateRequest
             {
@@ -36,7 +36,7 @@ namespace HBaseNet.HRpc
                 }
             };
 
-            if (Values?.Any() != true) return result.ToByteArray();
+            if (Values?.Any() != true) return result;
 
             var columns = Values
                 .Select(t =>
@@ -67,8 +67,12 @@ namespace HBaseNet.HRpc
                 }).ToArray();
 
             result.Mutation.ColumnValue.AddRange(columns);
+            return result;
+        }
 
-            return result.ToByteArray();
+        public override byte[] Serialize()
+        {
+            return SerializeToProto().ToByteArray();
         }
 
         public override IMessage ParseResponseFrom(byte[] bts)
