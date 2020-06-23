@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.Design;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -12,9 +11,9 @@ namespace HBaseNet.Console
 {
     public class SingleThreadOperation
     {
-        private readonly HBaseClient _client;
+        private readonly IStandardClient _client;
 
-        public SingleThreadOperation(HBaseClient client)
+        public SingleThreadOperation(IStandardClient client)
         {
             _client = client;
         }
@@ -31,7 +30,7 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = await _client.SendRPC<MutateResponse>(new MutateCall(Program.Table, rowKey, Program.Values,
+                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values,
                     MutationProto.Types.MutationType.Put));
             }
         }
@@ -40,7 +39,7 @@ namespace HBaseNet.Console
         {
             var scanResults = await _client.Scan(
                 new ScanCall(Program.Table, Program.Family, "1".ToUtf8Bytes(), "5".ToUtf8Bytes())
-                { Families = Program.Family });
+                    {Families = Program.Family});
             Log.Information($"scan result count:{scanResults.Count}");
         }
 
@@ -52,7 +51,7 @@ namespace HBaseNet.Console
             foreach (var result in scanResults)
             {
                 var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).Single();
-                var delResult = await _client.SendRPC<MutateResponse>(new MutateCall(Program.Table, rowKey, null,
+                var delResult = await _client.Delete(new MutateCall(Program.Table, rowKey, null,
                     MutationProto.Types.MutationType.Delete));
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
@@ -62,14 +61,11 @@ namespace HBaseNet.Console
         {
             var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
             var put = new MutateCall(Program.Table, rowKey, Program.Values,
-                MutationProto.Types.MutationType.Put);
-
-            var rs = await _client.SendRPC<MutateResponse>(put);
-            if (rs?.Processed == true)
+                MutationProto.Types.MutationType.Put)
             {
-                var resultF = await _client.CheckAndPut(put, "default", "key", "ex".ToUtf8Bytes(), new CancellationToken());
-            }
-            put.Key = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray()).ToUtf8Bytes();
+                Key = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray()).ToUtf8Bytes()
+            };
+
             var resultT = await _client.CheckAndPut(put, "default", "key", "ex".ToUtf8Bytes(), new CancellationToken());
         }
     }

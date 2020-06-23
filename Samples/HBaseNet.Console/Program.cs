@@ -1,5 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
@@ -42,21 +44,33 @@ namespace HBaseNet.Console
                     }
                 }
             };
-            var ado = new AdminClientOperation();
+            var client = await new StandardClient(ZkQuorum).Build();
+            var admin = await new AdminClient(ZkQuorum).Build();
+            var ado = new AdminClientOperation(admin);
             await ado.ExecAll();
 
-            var client = new HBaseClient(ZkQuorum);
+
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
+
+            if (await sto.CheckTable() == false)
+            {
+                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {"default"})
+                {
+                    SplitKeys = Enumerable.Range(0, 10).Select(t => t.ToString()).ToArray()
+                };
+                await admin.CreateTable(create);
+            }
+
             if (await sto.CheckTable() == false) return;
 
-            await sto.ExecCheckAndPut();
+            // await sto.ExecCheckAndPut();
 
-            const int putCount = 100;
+            const int putCount = 100000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
-            // await mto.ExecPut(putCount);
+            await mto.ExecPut(putCount);
             Log.Logger.Information($"exec multi thread put ,count: {putCount},take :{sth.Elapsed}");
 
             sth.Restart();
@@ -69,6 +83,13 @@ namespace HBaseNet.Console
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
             // await sto.ExecScanAndDelete();
             Console.ReadLine();
+            Console.WriteLine($"Do you want to delete table {Table}?(y)");
+            if (Console.ReadKey().Key == ConsoleKey.Y)
+            {
+                await admin.DisableTable(new DisableTableCall(Table.ToUtf8Bytes()));
+                var dt = await admin.DeleteTable(new DeleteTableCall(Table.ToUtf8Bytes()));
+                Log.Logger.Information($"del table:{Table},result:{dt}");
+            }
         }
     }
 }

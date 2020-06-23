@@ -48,7 +48,6 @@ namespace HBaseNet.HRpc
                 }
             };
 
-
             if (SplitKeys?.Any() == true)
             {
                 cTable.SplitKeys.AddRange(SplitKeys.Select(ByteString.CopyFromUtf8).ToArray());

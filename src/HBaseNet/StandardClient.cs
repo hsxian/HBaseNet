@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,38 +17,32 @@ using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
 using Pb;
 using RegionInfo = HBaseNet.Region.RegionInfo;
-using RegionClient = HBaseNet.Region.RegionClient;
 
 namespace HBaseNet
 {
-    public class HBaseClient
+    public class StandardClient : CommonClient, IStandardClient
     {
-        private readonly ILogger<HBaseClient> _logger;
-        private readonly string _zkquorum;
         private readonly byte[] _metaTableName;
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
-        private readonly RegionInfo _adminRegionInfo;
         private RegionClient _metaClient;
-        private RegionClient _adminClient;
-        private readonly ZkHelper _zkHelper;
+
         private ConcurrentDictionary<RegionInfo, RegionClient> InfoRegionCache { get; }
         private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
-        public TimeSpan BackoffStart { get; set; } = TimeSpan.FromMilliseconds(16);
-        public TimeSpan BackoffIncrease { get; set; } = TimeSpan.FromSeconds(5);
-        public int RetryCount { get; set; } = 9;
-        public ClientType Type { get; set; }
-        public CancellationTokenSource DefaultCancellationSource { get; set; }
-        private bool _isLocatingMetaClient;
-        private bool _isLocatingMasterClient;
-        private bool _isLocatingRegion;
+        private volatile bool _isLocatingRegion;
+        private readonly AutoResetEvent _mutexForLoadRegion;
 
-        public HBaseClient(string zkquorum, ClientType type = ClientType.StandardClient)
+
+        public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
-            Type = type;
-            _zkquorum = zkquorum;
-            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<HBaseClient>();
-            _zkHelper = new ZkHelper();
+            token ??= DefaultCancellationSource.Token;
+            await LocateMetaClient(token.Value);
+            return this;
+        }
+
+        public StandardClient(string zkQuorum)
+        {
+            ZkQuorum = zkQuorum;
             _infoFamily = new Dictionary<string, string[]>
             {
                 {"info", null}
@@ -59,21 +54,22 @@ namespace HBaseNet
                 RegionName = "hbase:meta,,1".ToUtf8Bytes(),
                 StopKey = new byte[0]
             };
-            _adminRegionInfo = new RegionInfo();
             InfoRegionCache = new ConcurrentDictionary<RegionInfo, RegionClient>();
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
-            DefaultCancellationSource = new CancellationTokenSource();
+            _mutexForLoadRegion = new AutoResetEvent(true);
         }
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
         {
+            token ??= DefaultCancellationSource.Token;
             var get = new GetCall(table, "theKey");
             return null != await SendRPCToRegion<GetResponse>(get, token);
         }
 
         public async Task<bool> CheckAndPut(MutateCall put, string family, string qualifier,
-            byte[] expectedValue, CancellationToken token)
+            byte[] expectedValue, CancellationToken? token = null)
         {
+            token ??= DefaultCancellationSource.Token;
             var cas = new CheckAndPutCall(put, family, qualifier, expectedValue);
             var res = await SendRPCToRegion<MutateResponse>(cas, token);
             return res != null && res.Processed;
@@ -81,6 +77,7 @@ namespace HBaseNet
 
         public async Task<List<Result>> Scan(ScanCall scan, CancellationToken? token = null)
         {
+            token ??= DefaultCancellationSource.Token;
             var results = new List<Result>();
             ScanResponse scanres;
             ScanCall rpc = null;
@@ -115,6 +112,50 @@ namespace HBaseNet
             return results;
         }
 
+        public async Task<GetResponse> Get(GetCall get, CancellationToken? token = null)
+        {
+            token ??= DefaultCancellationSource.Token;
+            var res = await SendRPCToRegion<GetResponse>(get, token.Value);
+            return res;
+        }
+
+        public async Task<MutateResponse> Put(MutateCall put, CancellationToken? token = null)
+        {
+            token ??= DefaultCancellationSource.Token;
+            put.MutationType = MutationProto.Types.MutationType.Put;
+            var res = await SendRPCToRegion<MutateResponse>(put, token.Value);
+            return res;
+        }
+
+        public async Task<MutateResponse> Delete(MutateCall del, CancellationToken? token = null)
+        {
+            token ??= DefaultCancellationSource.Token;
+            del.MutationType = MutationProto.Types.MutationType.Delete;
+            var res = await SendRPCToRegion<MutateResponse>(del, token.Value);
+            return res;
+        }
+
+        public async Task<MutateResponse> Append(MutateCall apd, CancellationToken? token = null)
+        {
+            token ??= DefaultCancellationSource.Token;
+            apd.MutationType = MutationProto.Types.MutationType.Append;
+            var res = await SendRPCToRegion<MutateResponse>(apd, token.Value);
+            return res;
+        }
+
+        public async Task<long?> Increment(MutateCall inc, CancellationToken? token = null)
+        {
+            token ??= DefaultCancellationSource.Token;
+            inc.MutationType = MutationProto.Types.MutationType.Increment;
+            var res = await SendRPCToRegion<MutateResponse>(inc, token.Value);
+            if (res?.Result?.Cell?.Count == 1)
+            {
+                return (long)BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
+            }
+
+            return null;
+        }
+
         private async Task<RegionClient> QueueRPC(ICall rpc, CancellationToken token)
         {
             var (client, reg) = await ResolveRegion(rpc, token);
@@ -130,55 +171,50 @@ namespace HBaseNet
 
         private async Task<(RegionClient client, RegionInfo info)> ResolveRegion(ICall rpc, CancellationToken token)
         {
-            if (Type == ClientType.AdminClient)
-            {
-                if (_adminClient == null)
-                {
-                    await LocateMasterClient(token);
-                }
-
-                return (_adminClient, _adminRegionInfo);
-            }
-
             var reg = GetInfoFromCache(rpc.Table, rpc.Key);
             var client = GetRegionFromCache(reg);
             if (client != null)
                 return (client, reg);
 
-            if (_metaClient == null)
-            {
-                await LocateMetaClient(token);
-            }
+            await TaskEx.WaitOn(() => _isLocatingRegion, 1, 20000);
+            _isLocatingRegion = true;
 
-            await TaskEx.WaitOn(() => _isLocatingRegion);
             reg = GetInfoFromCache(rpc.Table, rpc.Key);
             client = GetRegionFromCache(reg);
 
-            if (client != null)
-                return (client, reg);
-
-
-            (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
-            if (reg != null)
+            if (client == null || reg == null)
             {
-                KeyInfoCache.TryAdd(reg.RegionName, reg);
-                InfoRegionCache.TryAdd(reg, client);
+                (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
+                if (reg != null)
+                {
+                    while (KeyInfoCache.ContainsKey(reg.RegionName) == false)
+                    {
+                        KeyInfoCache.TryAdd(reg.RegionName, reg);
+                    }
+
+                    while (InfoRegionCache.ContainsKey(reg) == false)
+                    {
+                        InfoRegionCache.TryAdd(reg, client);
+                    }
+                }
             }
 
+            _isLocatingRegion = false;
             return (client, reg);
-        }
-
-        public async Task<T> SendRPC<T>(ICall rpc, CancellationToken? token = null) where T : class, IMessage
-        {
-            return await SendRPCToRegion<T>(rpc, token);
         }
 
         private async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token)
             where TResponse : class, IMessage
         {
             token ??= DefaultCancellationSource.Token;
-            while (rpc.RetryCount < RetryCount && token.Value.IsCancellationRequested == false)
+            while (token.Value.IsCancellationRequested == false)
             {
+                if (rpc.RetryCount > RetryCount)
+                {
+                    _logger.LogError($"RPC ({rpc.Name}) retries more than {RetryCount} times and will not try again.");
+                    return null;
+                }
+
                 var client = await QueueRPC(rpc, token.Value);
                 if (client == null)
                 {
@@ -206,6 +242,9 @@ namespace HBaseNet
                     case RetryableException _:
                         rpc.RetryCount++;
                         continue;
+                    case TimeoutException _:
+                        ClientDown(rpc.Info);
+                        return null;
                     default:
                         return null;
                 }
@@ -214,14 +253,32 @@ namespace HBaseNet
             return null;
         }
 
+        private void ClientDown(RegionInfo reg)
+        {
+            var (_, client) = InfoRegionCache.FirstOrDefault(t => t.Key == reg);
+            if (client == null) return;
+            client.Dispose();
+            var downs = InfoRegionCache
+                .Where(t => t.Value == client)
+                .ToArray();
+
+            foreach (var (key, _) in downs)
+            {
+                while (InfoRegionCache.ContainsKey(key))
+                {
+                    InfoRegionCache.TryRemove(key, out _);
+                }
+            }
+        }
+
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(byte[] searchKey,
             CancellationToken token)
         {
             var backoff = BackoffStart;
             for (var i = 0; i < RetryCount && token.IsCancellationRequested == false; i++)
             {
-                var (reg, host, port) = await FindRegionInfoForRPC(searchKey, token);
-                if (reg == null || port == 0)
+                var reg = await FindRegionInfoForRPC(searchKey, token);
+                if (reg == null)
                 {
                     _logger.LogWarning(
                         $"Locate region failed in {i + 1}th，try the locate again after {backoff}.");
@@ -229,13 +286,14 @@ namespace HBaseNet
                     continue;
                 }
 
-                var cacheClient = InfoRegionCache.Values.FirstOrDefault(t => t.Host == host && t.Port == port);
+                var cacheClient = InfoRegionCache.Values.FirstOrDefault(t => t.Host == reg.Host && t.Port == reg.Port);
                 if (cacheClient != null)
                 {
                     return (cacheClient, reg);
                 }
 
-                var client = await new RegionClient(host, port, RegionType.ClientService).Build(RetryCount, token);
+                var client =
+                    await new RegionClient(reg.Host, reg.Port, RegionType.ClientService).Build(RetryCount, token);
                 return (client, reg);
             }
 
@@ -245,47 +303,15 @@ namespace HBaseNet
         private async Task<(RegionClient client, RegionInfo info)> LocateRegion(byte[] table, byte[] key,
             CancellationToken token)
         {
-            if (_metaClient == null) return (null, null);
-            _isLocatingRegion = true;
             var searchKey = RegionInfo.CreateRegionSearchKey(table, key);
             var result = await TryLocateRegion(searchKey, token);
-            _isLocatingRegion = false;
             return result;
         }
 
-        private async Task<TResult> TryLocateResource<TResult>(string resource,
-            Func<byte[], TResult> getResultFunc, CancellationToken token)
-        {
-            var zkc = _zkHelper.CreateClient(_zkquorum, TimeSpan.FromSeconds(30));
-            var backoff = BackoffStart;
-            var result = default(TResult);
-            for (var i = 0; i < RetryCount && token.IsCancellationRequested == false; i++)
-            {
-                result = await _zkHelper.LocateResource(zkc, resource, getResultFunc);
-                if (result == null)
-                {
-                    _logger.LogWarning(
-                        $"Locate {resource} failed in {i + 1}th，try the locate again after {backoff}.");
-                    backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
-                }
-                else
-                {
-                    break;
-                }
-            }
-
-            await zkc.closeAsync();
-            if (result == null)
-                _logger.LogWarning(
-                    $"Locate {resource} failed in {RetryCount}th, please check your network.");
-            return result;
-        }
 
         private async Task LocateMetaClient(CancellationToken token)
         {
-            await TaskEx.WaitOn(() => _isLocatingMetaClient);
             if (_metaClient != null) return;
-            _isLocatingMetaClient = true;
             var meta = await TryLocateResource(ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom,
                 token);
 
@@ -294,24 +320,8 @@ namespace HBaseNet
                 .Build(RetryCount, token);
             if (_metaClient != null)
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
-            _isLocatingMetaClient = false;
         }
 
-        private async Task LocateMasterClient(CancellationToken token)
-        {
-            await TaskEx.WaitOn(() => _isLocatingMasterClient);
-            if (_adminClient != null) return;
-            _isLocatingMasterClient = true;
-            var master = await TryLocateResource(ZkHelper.HBaseMaster, Master.Parser.ParseFrom,
-                token);
-
-            _adminClient = await new RegionClient(master.Master_.HostName, (ushort) master.Master_.Port,
-                    RegionType.MasterService)
-                .Build(RetryCount, token);
-            if (_adminClient != null)
-                _logger.LogInformation($"Locate master server at : {_adminClient.Host}:{_adminClient.Port}");
-            _isLocatingMasterClient = false;
-        }
 
         private bool IsCacheKeyForTable(byte[] table, byte[] cacheKey)
         {
@@ -333,8 +343,6 @@ namespace HBaseNet
         private RegionInfo GetInfoFromCache(byte[] table, byte[] key)
         {
             if (BinaryEx.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
-            if (Type == ClientType.AdminClient) return _adminRegionInfo;
-
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var (_, info) = KeyInfoCache.EnumerateFrom(search).FirstOrDefault();
             if (info == null || false == IsCacheKeyForTable(table, info.RegionName)) return null;
@@ -344,9 +352,8 @@ namespace HBaseNet
             return info;
         }
 
-        private async Task<(RegionInfo, string, ushort)> FindRegionInfoForRPC(byte[] searchKey, CancellationToken token)
+        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey, CancellationToken token)
         {
-            if (_metaClient == null) return (null, null, 0);
             var getCall = GetCall.CreateGetBefore(_metaTableName, searchKey);
             getCall.Families = _infoFamily;
             getCall.Info = _metaRegionInfo;
@@ -358,32 +365,39 @@ namespace HBaseNet
                 return ParseMetaTableResponse(response);
             }
 
-            return (null, null, 0);
+            return null;
         }
 
-        private (RegionInfo, string, ushort) ParseMetaTableResponse(GetResponse metaRow)
+        private RegionInfo ParseMetaTableResponse(GetResponse metaRow)
         {
-            if (metaRow?.HasResult != true) return (null, null, 0);
+            if (metaRow?.HasResult != true) return null;
 
             var regCell = metaRow.Result.Cell
                 .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));
 
             var reg = RegionInfo.ParseFromCell(regCell);
-            if (reg == null) return (null, null, 0);
+            if (reg == null) return null;
 
             var server = metaRow.Result.Cell
                 .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.Server) && t.HasValue);
-            if (server == null) return (null, null, 0);
+            if (server == null) return null;
             var serverData = server.Value.ToArray();
 
             var idxColon = Array.IndexOf(serverData, ConstByte.Colon);
-            if (idxColon < 1) return (null, null, 0);
+            if (idxColon < 1) return null;
 
             var host = serverData[..idxColon].ToUtf8String();
             if (false == ushort.TryParse(serverData[(idxColon + 1)..].ToUtf8String(), out var port))
-                return (null, null, 0);
+                return null;
             _logger.LogInformation($"Find region info :{reg.RegionName.ToUtf8String()}, at {host}:{port}");
-            return (reg, host, port);
+            reg.Host = host;
+            reg.Port = port;
+            return reg;
+        }
+
+        public void Dispose()
+        {
+            DefaultCancellationSource.Cancel();
         }
     }
 }

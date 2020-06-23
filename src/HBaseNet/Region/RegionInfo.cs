@@ -19,11 +19,11 @@ namespace HBaseNet.Region
 
         public byte[] StartKey { get; set; }
         public byte[] StopKey { get; set; }
-        public CancellationTokenSource CancellationSource { get; }
+        public string Host { get; set; }
+        public ushort Port { get; set; }
 
         public RegionInfo()
         {
-            CancellationSource = new CancellationTokenSource();
         }
 
         public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)

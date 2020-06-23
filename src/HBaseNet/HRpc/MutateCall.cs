@@ -11,7 +11,7 @@ namespace HBaseNet.HRpc
     public class MutateCall : BaseCall
     {
         public IDictionary<string, IDictionary<string, byte[]>> Values { get; }
-        public MutationProto.Types.MutationType MutationType { get; }
+        public MutationProto.Types.MutationType MutationType { get; set; }
 
         public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
             MutationProto.Types.MutationType mutationType)
