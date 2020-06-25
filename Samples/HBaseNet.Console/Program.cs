@@ -65,7 +65,7 @@ namespace HBaseNet.Console
 
             // await sto.ExecCheckAndPut();
 
-            const int putCount = 100000;
+            const int putCount = 1000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();

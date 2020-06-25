@@ -24,9 +24,13 @@ namespace HBaseNet.Console
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
                 var rs = _client.Put(new MutateCall(Program.Table, rowKey, Program.Values,
-                    MutationProto.Types.MutationType.Put));
+                        MutationProto.Types.MutationType.Put)
+                    {
+                        Timestamp = new DateTime(2019, 1, 1, 1, 1, 1),
+                    });
                 tasks.Add(rs);
             }
+
             await Task.WhenAll(tasks);
         }
     }

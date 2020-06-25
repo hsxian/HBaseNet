@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
@@ -11,6 +12,8 @@ namespace HBaseNet.HRpc
     public class MutateCall : BaseCall
     {
         public IDictionary<string, IDictionary<string, byte[]>> Values { get; }
+        public DateTime? Timestamp { get; set; }
+        public MutationProto.Types.Durability Durability { get; set; } = MutationProto.Types.Durability.UseDefault;
         public MutationProto.Types.MutationType MutationType { get; set; }
 
         public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
@@ -32,9 +35,15 @@ namespace HBaseNet.HRpc
                 Mutation = new MutationProto
                 {
                     Row = ByteString.CopyFrom(Key),
-                    MutateType = MutationType
+                    MutateType = MutationType,
+                    Durability = Durability
                 }
             };
+
+            if (Timestamp != null)
+            {
+                result.Mutation.Timestamp = (ulong) Timestamp.Value.ToUnix();
+            }
 
             if (Values?.Any() != true) return result;
 
