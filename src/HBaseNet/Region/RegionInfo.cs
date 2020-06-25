@@ -21,10 +21,7 @@ namespace HBaseNet.Region
         public byte[] StopKey { get; set; }
         public string Host { get; set; }
         public ushort Port { get; set; }
-
-        public RegionInfo()
-        {
-        }
+        public RegionClient Client { get; set; }
 
         public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)
         {
@@ -129,6 +126,32 @@ namespace HBaseNet.Region
                 StopKey = reg.EndKey.ToArray()
             };
             return result;
+        }
+
+        public static RegionInfo ParseFromGetResponse(GetResponse metaRow)
+        {
+            if (metaRow?.HasResult != true) return null;
+
+            var regCell = metaRow.Result.Cell
+                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));
+
+            var reg = RegionInfo.ParseFromCell(regCell);
+            if (reg == null) return null;
+
+            var server = metaRow.Result.Cell
+                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.Server) && t.HasValue);
+            if (server == null) return null;
+            var serverData = server.Value.ToArray();
+
+            var idxColon = Array.IndexOf(serverData, ConstByte.Colon);
+            if (idxColon < 1) return null;
+
+            var host = serverData[..idxColon].ToUtf8String();
+            if (false == ushort.TryParse(serverData[(idxColon + 1)..].ToUtf8String(), out var port))
+                return null;
+            reg.Host = host;
+            reg.Port = port;
+            return reg;
         }
     }
 }

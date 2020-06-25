@@ -26,15 +26,15 @@ namespace HBaseNet
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
-        private ConcurrentDictionary<RegionInfo, RegionClient> InfoRegionCache { get; }
         private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
+        private List<RegionClient> ClientCache { get; }
         private volatile bool _isLocatingRegion;
 
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
-            await LocateMetaClient(token.Value);
-            return this;
+            var res = await LocateMetaClient(token.Value);
+            return res ? this : null;
         }
 
         public StandardClient(string zkQuorum)
@@ -51,8 +51,8 @@ namespace HBaseNet
                 RegionName = "hbase:meta,,1".ToUtf8Bytes(),
                 StopKey = new byte[0]
             };
-            InfoRegionCache = new ConcurrentDictionary<RegionInfo, RegionClient>();
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
+            ClientCache = new List<RegionClient>();
         }
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
@@ -168,7 +168,7 @@ namespace HBaseNet
         private async Task<(RegionClient client, RegionInfo info)> ResolveRegion(ICall rpc, CancellationToken token)
         {
             var reg = GetInfoFromCache(rpc.Table, rpc.Key);
-            var client = GetRegionFromCache(reg);
+            var client = reg?.Client;
             if (client != null)
                 return (client, reg);
 
@@ -176,7 +176,7 @@ namespace HBaseNet
             _isLocatingRegion = true;
 
             reg = GetInfoFromCache(rpc.Table, rpc.Key);
-            client = GetRegionFromCache(reg);
+            client = reg?.Client;
 
             if (client == null || reg == null)
             {
@@ -188,9 +188,9 @@ namespace HBaseNet
                         KeyInfoCache.TryAdd(reg.RegionName, reg);
                     }
 
-                    while (InfoRegionCache.ContainsKey(reg) == false)
+                    if (ClientCache.Any(t => t.Host == reg.Host && t.Port == reg.Port) == false)
                     {
-                        InfoRegionCache.TryAdd(reg, client);
+                        ClientCache.Add(client);
                     }
                 }
             }
@@ -251,19 +251,11 @@ namespace HBaseNet
 
         private void ClientDown(RegionInfo reg)
         {
-            var (_, client) = InfoRegionCache.FirstOrDefault(t => t.Key == reg);
-            if (client == null) return;
-            client.Dispose();
-            var downs = InfoRegionCache
-                .Where(t => t.Value == client)
-                .ToArray();
-
-            foreach (var (key, _) in downs)
+            if (reg == null) return;
+            var cs = ClientCache.Where(t => t.Host == reg.Host && t.Port == reg.Port).ToArray();
+            foreach (var c in cs)
             {
-                while (InfoRegionCache.ContainsKey(key))
-                {
-                    InfoRegionCache.TryRemove(key, out _);
-                }
+                ClientCache.Remove(c);
             }
         }
 
@@ -282,14 +274,10 @@ namespace HBaseNet
                     continue;
                 }
 
-                var cacheClient = InfoRegionCache.Values.FirstOrDefault(t => t.Host == reg.Host && t.Port == reg.Port);
-                if (cacheClient != null)
-                {
-                    return (cacheClient, reg);
-                }
-
-                var client =
-                    await new RegionClient(reg.Host, reg.Port, RegionType.ClientService).Build(RetryCount, token);
+                var client = GetRegionFromCache(reg.Host, reg.Port)
+                             ?? await new RegionClient(reg.Host, reg.Port, RegionType.ClientService)
+                                 .Build(RetryCount, token);
+                reg.Client = client;
                 return (client, reg);
             }
 
@@ -330,11 +318,9 @@ namespace HBaseNet
             return cacheKey[table.Length] == ConstByte.Comma;
         }
 
-        private RegionClient GetRegionFromCache(RegionInfo reg)
+        private RegionClient GetRegionFromCache(string host, ushort port)
         {
-            if (reg == null) return null;
-            InfoRegionCache.TryGetValue(reg, out var c);
-            return c;
+            return ClientCache.FirstOrDefault(t => t.Host == host && t.Port == port);
         }
 
         private RegionInfo GetInfoFromCache(byte[] table, byte[] key)
@@ -349,8 +335,10 @@ namespace HBaseNet
             return info;
         }
 
-        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey, CancellationToken token)
+        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey,
+            CancellationToken token)
         {
+            var result = default(RegionInfo);
             var getCall = GetCall.CreateGetBefore(_metaTableName, searchKey);
             getCall.Families = _infoFamily;
             getCall.Info = _metaRegionInfo;
@@ -359,37 +347,15 @@ namespace HBaseNet
 
             if (resp?.Msg is GetResponse response)
             {
-                return ParseMetaTableResponse(response);
+                result = RegionInfo.ParseFromGetResponse(response);
+                if (result != null)
+                {
+                    _logger.LogInformation(
+                        $"Find region info :{result.RegionName.ToUtf8String()}, at {result.Host}:{result.Port}");
+                }
             }
 
-            return null;
-        }
-
-        private RegionInfo ParseMetaTableResponse(GetResponse metaRow)
-        {
-            if (metaRow?.HasResult != true) return null;
-
-            var regCell = metaRow.Result.Cell
-                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));
-
-            var reg = RegionInfo.ParseFromCell(regCell);
-            if (reg == null) return null;
-
-            var server = metaRow.Result.Cell
-                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.Server) && t.HasValue);
-            if (server == null) return null;
-            var serverData = server.Value.ToArray();
-
-            var idxColon = Array.IndexOf(serverData, ConstByte.Colon);
-            if (idxColon < 1) return null;
-
-            var host = serverData[..idxColon].ToUtf8String();
-            if (false == ushort.TryParse(serverData[(idxColon + 1)..].ToUtf8String(), out var port))
-                return null;
-            _logger.LogInformation($"Find region info :{reg.RegionName.ToUtf8String()}, at {host}:{port}");
-            reg.Host = host;
-            reg.Port = port;
-            return reg;
+            return result;
         }
 
         public void Dispose()

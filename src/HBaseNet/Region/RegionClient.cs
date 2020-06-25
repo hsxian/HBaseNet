@@ -59,7 +59,7 @@ namespace HBaseNet.Region
                     await _socket.ConnectAsync(ipAddress, Port);
                     _conn = new NetworkStream(_socket, FileAccess.ReadWrite)
                         {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
-                    _logger.LogInformation($"connect to the RegionServer at {Host}:{Port}");
+                    _logger.LogInformation($"Connect to the RegionServer({Type}) at {Host}:{Port}");
                     return;
                 }
                 catch (Exception e)
@@ -156,7 +156,13 @@ namespace HBaseNet.Region
                         {
                             _idRPCDict.TryRemove(callId, out _);
                         }
-                        result =new RPCResult{CallId = callId,Error = new TimeoutException($"RPC ({rpc.RPC.Name}) waiting time out({TimeOut} milliseconds),the client will no longer wait.")};
+
+                        result = new RPCResult
+                        {
+                            CallId = callId,
+                            Error = new TimeoutException(
+                                $"RPC ({rpc.RPC.Name}) waiting time out({TimeOut} milliseconds),the client will no longer wait.")
+                        };
                         _logger.LogError(result.Error.Message);
                         break;
                     }
