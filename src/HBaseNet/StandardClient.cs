@@ -26,12 +26,9 @@ namespace HBaseNet
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
-
         private ConcurrentDictionary<RegionInfo, RegionClient> InfoRegionCache { get; }
         private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
         private volatile bool _isLocatingRegion;
-        private readonly AutoResetEvent _mutexForLoadRegion;
-
 
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
@@ -56,7 +53,6 @@ namespace HBaseNet
             };
             InfoRegionCache = new ConcurrentDictionary<RegionInfo, RegionClient>();
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
-            _mutexForLoadRegion = new AutoResetEvent(true);
         }
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
@@ -150,7 +146,7 @@ namespace HBaseNet
             var res = await SendRPCToRegion<MutateResponse>(inc, token.Value);
             if (res?.Result?.Cell?.Count == 1)
             {
-                return (long)BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
+                return (long) BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
             }
 
             return null;
@@ -203,7 +199,7 @@ namespace HBaseNet
             return (client, reg);
         }
 
-        private async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token)
+        protected async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token)
             where TResponse : class, IMessage
         {
             token ??= DefaultCancellationSource.Token;
@@ -309,9 +305,9 @@ namespace HBaseNet
         }
 
 
-        private async Task LocateMetaClient(CancellationToken token)
+        protected async Task<bool> LocateMetaClient(CancellationToken token)
         {
-            if (_metaClient != null) return;
+            if (_metaClient != null) return true;
             var meta = await TryLocateResource(ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom,
                 token);
 
@@ -320,6 +316,7 @@ namespace HBaseNet
                 .Build(RetryCount, token);
             if (_metaClient != null)
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
+            return _metaClient != null;
         }
 
 

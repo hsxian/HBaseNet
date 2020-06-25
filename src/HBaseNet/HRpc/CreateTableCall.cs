@@ -78,7 +78,7 @@ namespace HBaseNet.HRpc
 
         public override IMessage ParseResponseFrom(byte[] bts)
         {
-            return bts.TryParseTo(CreateNamespaceResponse.Parser.ParseFrom);
+            return bts.TryParseTo(CreateTableResponse.Parser.ParseFrom);
         }
     }
 }

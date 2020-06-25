@@ -12,7 +12,7 @@ namespace HBaseNet.Region.Exceptions
 
         public static Dictionary<string, Type> JavaExceptionMap { get; } = new Dictionary<string, Type>
         {
-            {"org.apache.hadoop.hbase.exceptions.FailedSanityCheckException", typeof(Exception)},
+            {"org.apache.hadoop.hbase.exceptions.FailedSanityCheckException", typeof(RetryableException)},
             {"org.apache.hadoop.hbase.NotServingRegionException", typeof(RetryableException)},
             {"org.apache.hadoop.hbase.exceptions.RegionMovedException", typeof(RetryableException)},
             {"org.apache.hadoop.hbase.exceptions.RegionOpeningException", typeof(RetryableException)},

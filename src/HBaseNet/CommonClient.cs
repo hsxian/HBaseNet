@@ -17,7 +17,7 @@ namespace HBaseNet
         protected TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
         protected int RetryCount { get; set; } = 9;
         protected CancellationTokenSource DefaultCancellationSource { get; }
-
+        
         protected CommonClient()
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<CommonClient>();

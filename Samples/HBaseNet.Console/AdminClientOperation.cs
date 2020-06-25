@@ -31,6 +31,7 @@ namespace HBaseNet.Console
             var dt = await _admin.DisableTable(new DisableTableCall(table));
             Log.Logger.Information($"Disable table: {table.ToUtf8String()},result:{dt}");
             var del = await _admin.DeleteTable(delete);
+            del = await _admin.DeleteTable(delete);
             Log.Logger.Information($"Delete table: {table.ToUtf8String()},result:{del}");
         }
     }

@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
-using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -66,7 +65,7 @@ namespace HBaseNet.Console
 
             // await sto.ExecCheckAndPut();
 
-            const int putCount = 100000;
+            const int putCount = 10;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
@@ -83,6 +82,7 @@ namespace HBaseNet.Console
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
             // await sto.ExecScanAndDelete();
             Console.ReadLine();
+            
             Console.WriteLine($"Do you want to delete table {Table}?(y)");
             if (Console.ReadKey().Key == ConsoleKey.Y)
             {
