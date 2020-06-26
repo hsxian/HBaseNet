@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
@@ -15,6 +16,8 @@ namespace HBaseNet.HRpc
         private bool CloseScanner { get; }
         private ulong? ScannerID { get; }
         public Filter.IFilter Filters { get; set; }
+        public TimeRange TimeRange { get; set; }
+        public uint MaxVersions { get; set; } = 1;
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
@@ -68,7 +71,9 @@ namespace HBaseNet.HRpc
                 {
                     StartRow = ByteString.CopyFrom(StartRow),
                     StopRow = ByteString.CopyFrom(StopRow),
-                    Filter = Filters?.ConvertToPBFilter()
+                    Filter = Filters?.ConvertToPBFilter(),
+                    MaxVersions = MaxVersions,
+                    TimeRange = TimeRange
                 };
                 var cols = ConvertToColumns(Families);
                 if (cols?.Any() == true)

@@ -82,11 +82,16 @@ namespace HBaseNet
             var stopRow = scan.StopRow;
             var families = scan.Families;
             var filters = scan.Filters;
+            var timeRange = scan.TimeRange;
+            var maxVersion = scan.MaxVersions;
             do
             {
-                rpc = rpc == null
-                    ? new ScanCall(table, families, startRow, stopRow) {Filters = filters}
-                    : new ScanCall(table, families, rpc.Info.StopKey, stopRow) {Filters = filters};
+                rpc = new ScanCall(table, families, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
+                {
+                    Filters = filters,
+                    TimeRange = timeRange,
+                    MaxVersions = maxVersion
+                };
                 scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
                 if (scanres?.Results?.Any() != true) break;
                 results.AddRange(scanres.Results);
@@ -339,9 +344,7 @@ namespace HBaseNet
             CancellationToken token)
         {
             var result = default(RegionInfo);
-            var getCall = GetCall.CreateGetBefore(_metaTableName, searchKey);
-            getCall.Families = _infoFamily;
-            getCall.Info = _metaRegionInfo;
+            var getCall = new GetCall(_metaTableName, searchKey, true) {Families = _infoFamily, Info = _metaRegionInfo};
             await _metaClient.QueueRPC(getCall);
             var resp = await _metaClient.GetRPCResult(getCall.CallId);
 

@@ -1,12 +1,7 @@
 using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Text;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
-using Google.Protobuf.WellKnownTypes;
 using HBaseNet.Utility;
 using Pb;
 
@@ -23,6 +18,8 @@ namespace HBaseNet.HRpc
 
         public Filter.IFilter Filters { get; set; }
         public bool IsExistsOnly { get; set; }
+        public TimeRange TimeRange { get; set; }
+        public uint MaxVersions { get; set; } = 1;
 
         public GetCall(string table, string key)
         {
@@ -30,18 +27,11 @@ namespace HBaseNet.HRpc
             Key = key.ToUtf8Bytes();
         }
 
-        public GetCall(byte[] table, byte[] key)
+        public GetCall(byte[] table, byte[] key, bool isClosestBefore = false)
         {
+            IsClosestBefore = isClosestBefore;
             Table = table;
             Key = key;
-        }
-
-        public static GetCall CreateGetBefore(byte[] table, byte[] key)
-        {
-            return new GetCall(table.ToUtf8String(), key.ToUtf8String())
-            {
-                IsClosestBefore = true
-            };
         }
 
         public override string Name => "Get";
@@ -56,9 +46,12 @@ namespace HBaseNet.HRpc
                     Row = ByteString.CopyFrom(Key),
                     ExistenceOnly = IsExistsOnly,
                     ClosestRowBefore = IsClosestBefore,
-                    Filter = Filters?.ConvertToPBFilter()
+                    Filter = Filters?.ConvertToPBFilter(),
+                    TimeRange = TimeRange,
+                    MaxVersions = MaxVersions
                 }
             };
+
             if (Families?.Any() == true)
             {
                 get.Get.Column.AddRange(ConvertToColumns(Families));

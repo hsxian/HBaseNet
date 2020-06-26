@@ -13,7 +13,7 @@ namespace HBaseNet.Test.Client
         [Test]
         public async Task TestHBaseClient()
         {
-           
+
         }
     }
 }

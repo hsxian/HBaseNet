@@ -2,8 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
-using HBaseNet.Const;
 using HBaseNet.Utility;
 using Pb;
 
@@ -42,7 +40,7 @@ namespace HBaseNet.HRpc
 
             if (Timestamp != null)
             {
-                result.Mutation.Timestamp = (ulong) Timestamp.Value.ToUnix();
+                result.Mutation.Timestamp = Timestamp.Value.ToUnixU13();
             }
 
             if (Values?.Any() != true) return result;
