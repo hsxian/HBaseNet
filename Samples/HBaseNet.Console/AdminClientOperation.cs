@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
+using HBaseNet.HRpc.Descriptors;
 using HBaseNet.Utility;
 using Serilog;
 
@@ -18,7 +19,20 @@ namespace HBaseNet.Console
         public async Task ExecAll()
         {
             var table = DateTime.Now.ToString("yyyyMMddHHmmss").ToUtf8Bytes();
-            var cols = new string[] {"info", "special"};
+            var cols = new[]
+            {
+                new ColumnFamily("info")
+                {
+                    Compression = Compression.GZ,
+                    KeepDeletedCells = KeepDeletedCells.TRUE
+                },
+                new ColumnFamily("special")
+                {
+                    Compression = Compression.GZ,
+                    KeepDeletedCells = KeepDeletedCells.TTL,
+                    DataBlockEncoding = DataBlockEncoding.PREFIX
+                }
+            };
             var create = new CreateTableCall(table, cols)
             {
                 SplitKeys = new[] {"0", "5"}

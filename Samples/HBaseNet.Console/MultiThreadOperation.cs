@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using Pb;
-using Serilog;
 
 namespace HBaseNet.Console
 {

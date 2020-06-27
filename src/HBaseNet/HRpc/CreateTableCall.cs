@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
-using Google.Protobuf.Collections;
+using HBaseNet.HRpc.Descriptors;
 using HBaseNet.Utility;
 using Pb;
 
@@ -9,26 +9,11 @@ namespace HBaseNet.HRpc
 {
     public class CreateTableCall : BaseCall
     {
-        public string[] Columns { get; }
+        public IEnumerable<ColumnFamily> Columns { get; }
         public override string Name => "CreateTable";
         public string[] SplitKeys { get; set; }
 
-        private readonly Dictionary<string, string> defaultAttributes = new Dictionary<string, string>
-        {
-            {"BLOOMFILTER", "ROW"},
-            {"VERSIONS", "3"},
-            {"IN_MEMORY", "false"},
-            {"KEEP_DELETED_CELLS", "FALSE"},
-            {"DATA_BLOCK_ENCODING", "FAST_DIFF"},
-            {"TTL", "2147483647"},
-            {"COMPRESSION", "NONE"},
-            {"MIN_VERSIONS", "0"},
-            {"BLOCKCACHE", "true"},
-            {"BLOCKSIZE", "65536"},
-            {"REPLICATION_SCOPE", "0"},
-        };
-
-        public CreateTableCall(byte[] table, string[] columns)
+        public CreateTableCall(byte[] table, IEnumerable<ColumnFamily> columns)
         {
             Table = table;
             Columns = columns;
@@ -55,22 +40,7 @@ namespace HBaseNet.HRpc
 
             if (Columns?.Any() == true)
             {
-                var attrs = defaultAttributes.Select(t =>
-                    new BytesBytesPair
-                    {
-                        First = ByteString.CopyFromUtf8(t.Key),
-                        Second = ByteString.CopyFromUtf8(t.Value)
-                    }).ToArray();
-
-                foreach (var col in Columns)
-                {
-                    var cfs = new ColumnFamilySchema
-                    {
-                        Name = ByteString.CopyFromUtf8(col),
-                    };
-                    cfs.Attributes.AddRange(attrs);
-                    cTable.TableSchema.ColumnFamilies.Add(cfs);
-                }
+                cTable.TableSchema.ColumnFamilies.AddRange(Columns.Select(t => t.ToPbSchema()).ToArray());
             }
 
             return cTable.ToByteArray();

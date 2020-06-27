@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
+using HBaseNet.HRpc.Descriptors;
 using HBaseNet.Utility;
 using Serilog;
 
@@ -53,7 +54,7 @@ namespace HBaseNet.Console
 
             if (await sto.CheckTable() == false)
             {
-                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {"default"})
+                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {new ColumnFamily("default"),})
                 {
                     SplitKeys = Enumerable.Range(0, 10).Select(t => t.ToString()).ToArray()
                 };
@@ -80,7 +81,7 @@ namespace HBaseNet.Console
             await sto.ExecScan();
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");
             // await sto.ExecScanAndDelete();
-            
+
             Console.WriteLine($"Do you want to delete table {Table}?(y)");
             if (Console.ReadKey().Key == ConsoleKey.Y)
             {
