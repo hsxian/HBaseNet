@@ -18,6 +18,7 @@ namespace HBaseNet.HRpc
         public Filter.IFilter Filters { get; set; }
         public TimeRange TimeRange { get; set; }
         public uint MaxVersions { get; set; } = 1;
+        public uint NumberOfRows { get; set; } = 128;
 
         public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
         {
@@ -63,7 +64,7 @@ namespace HBaseNet.HRpc
             {
                 Region = GetRegionSpecifier(),
                 CloseScanner = CloseScanner,
-                NumberOfRows = new UInt32Value {Value = 100}.Value //TODO:应该使用配置
+                NumberOfRows = NumberOfRows
             };
             if (ScannerID == null)
             {

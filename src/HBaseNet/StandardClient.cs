@@ -1,6 +1,5 @@
 using System;
 using System.Buffers.Binary;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -48,7 +47,7 @@ namespace HBaseNet
             _metaRegionInfo = new RegionInfo
             {
                 Table = "hbase:meta".ToUtf8Bytes(),
-                RegionName = "hbase:meta,,1".ToUtf8Bytes(),
+                Name = "hbase:meta,,1".ToUtf8Bytes(),
                 StopKey = new byte[0]
             };
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
@@ -84,13 +83,15 @@ namespace HBaseNet
             var filters = scan.Filters;
             var timeRange = scan.TimeRange;
             var maxVersion = scan.MaxVersions;
+            var numberOfRows = scan.NumberOfRows;
             do
             {
                 rpc = new ScanCall(table, families, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
                 {
                     Filters = filters,
                     TimeRange = timeRange,
-                    MaxVersions = maxVersion
+                    MaxVersions = maxVersion,
+                    NumberOfRows = numberOfRows,
                 };
                 scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
                 if (scanres?.Results?.Any() != true) break;
@@ -188,9 +189,14 @@ namespace HBaseNet
                 (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
                 if (reg != null)
                 {
-                    while (KeyInfoCache.ContainsKey(reg.RegionName) == false)
+                    var os = GetOverlaps(reg);
+                    foreach (var item in os)
                     {
-                        KeyInfoCache.TryAdd(reg.RegionName, reg);
+                        KeyInfoCache.TryRemove(item.Name, out _);
+                    }
+                    while (KeyInfoCache.ContainsKey(reg.Name) == false)
+                    {
+                        KeyInfoCache.TryAdd(reg.Name, reg);
                     }
 
                     if (ClientCache.Any(t => t.Host == reg.Host && t.Port == reg.Port) == false)
@@ -311,18 +317,7 @@ namespace HBaseNet
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
             return _metaClient != null;
         }
-
-
-        private bool IsCacheKeyForTable(byte[] table, byte[] cacheKey)
-        {
-            for (var i = 0; i < table.Length; i++)
-            {
-                if (table[i] != cacheKey[i]) return false;
-            }
-
-            return cacheKey[table.Length] == ConstByte.Comma;
-        }
-
+        
         private RegionClient GetRegionFromCache(string host, ushort port)
         {
             return ClientCache.FirstOrDefault(t => t.Host == host && t.Port == port);
@@ -333,10 +328,10 @@ namespace HBaseNet
             if (BinaryEx.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var (_, info) = KeyInfoCache.EnumerateFrom(search).FirstOrDefault();
-            if (info == null || false == IsCacheKeyForTable(table, info.RegionName)) return null;
+            if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
             if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0) return null;
             _logger.LogDebug(
-                $"get region info from cache, search key:{search.ToUtf8String()},match region name:{info.RegionName.ToUtf8String()}");
+                $"get region info from cache, search key:{search.ToUtf8String()},match region name:{info.Name.ToUtf8String()}");
             return info;
         }
 
@@ -354,11 +349,16 @@ namespace HBaseNet
                 if (result != null)
                 {
                     _logger.LogInformation(
-                        $"Find region info :{result.RegionName.ToUtf8String()}, at {result.Host}:{result.Port}");
+                        $"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
                 }
             }
 
             return result;
+        }
+
+        public RegionInfo[] GetOverlaps(RegionInfo reg)
+        {
+            return KeyInfoCache.Values.Where(t => t.IsRegionOverlap(reg)).ToArray();
         }
 
         public void Dispose()

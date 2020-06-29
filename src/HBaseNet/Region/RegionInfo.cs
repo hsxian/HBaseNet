@@ -2,6 +2,7 @@ using System;
 using System.Buffers.Binary;
 using System.Linq;
 using System.Threading;
+using CSharpTest.Net.IO;
 using HBaseNet.Const;
 using HBaseNet.Utility;
 using Pb;
@@ -15,7 +16,7 @@ namespace HBaseNet.Region
         /// <summary>
         /// table_name,start_key,timestamp[.MD5.]
         /// </summary>
-        public byte[] RegionName { get; set; }
+        public byte[] Name { get; set; }
 
         public byte[] StartKey { get; set; }
         public byte[] StopKey { get; set; }
@@ -102,10 +103,17 @@ namespace HBaseNet.Region
             return a.Length - b.Length;
         }
 
+        public bool IsRegionOverlap(RegionInfo other)
+        {
+            return BinaryComparer.Equals(Table, other.Table)
+                   && BinaryComparer.Compare(StartKey, other.StopKey) < 0
+                   && BinaryComparer.Compare(StopKey, other.StartKey) > 0;
+        }
+
         public override string ToString()
         {
             return
-                $"RegionInfo->Table: {Table.ToUtf8String()}, RegionName: {RegionName.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
+                $"RegionInfo->Table: {Table.ToUtf8String()}, RegionName: {Name.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
         }
 
         public static RegionInfo ParseFromCell(Cell cell)
@@ -121,7 +129,7 @@ namespace HBaseNet.Region
             result = new RegionInfo
             {
                 Table = reg.TableName.Qualifier.ToArray(),
-                RegionName = cell.Row.ToArray(),
+                Name = cell.Row.ToArray(),
                 StartKey = reg.StartKey.ToArray(),
                 StopKey = reg.EndKey.ToArray()
             };

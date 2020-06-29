@@ -24,7 +24,7 @@ namespace HBaseNet.HRpc
             return new RegionSpecifier
             {
                 Type = RegionSpecifier.Types.RegionSpecifierType.RegionName,
-                Value = ByteString.CopyFrom(Info.RegionName)
+                Value = ByteString.CopyFrom(Info.Name)
             };
         }
 
