@@ -55,7 +55,6 @@ namespace HBaseNet.Zk
         {
             var client = new ZooKeeper(connectString, (int)timeout.TotalMilliseconds, watcher ?? new ZkLogWatcher(),
                 canBeReadOnly);
-
             return client;
         }
     }

@@ -7,7 +7,6 @@ using System.Threading.Tasks;
 using CSharpTest.Net.Collections;
 using CSharpTest.Net.IO;
 using Google.Protobuf;
-using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Region.Exceptions;
@@ -44,10 +43,8 @@ namespace HBaseNet
                 {"info", null}
             };
             _metaTableName = "hbase:meta".ToUtf8Bytes();
-            _metaRegionInfo = new RegionInfo
+            _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), new byte[0])
             {
-                Table = "hbase:meta".ToUtf8Bytes(),
-                Name = "hbase:meta,,1".ToUtf8Bytes(),
                 StopKey = new byte[0]
             };
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
@@ -194,6 +191,7 @@ namespace HBaseNet
                     {
                         KeyInfoCache.TryRemove(item.Name, out _);
                     }
+
                     while (KeyInfoCache.ContainsKey(reg.Name) == false)
                     {
                         KeyInfoCache.TryAdd(reg.Name, reg);
@@ -317,7 +315,7 @@ namespace HBaseNet
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
             return _metaClient != null;
         }
-        
+
         private RegionClient GetRegionFromCache(string host, ushort port)
         {
             return ClientCache.FirstOrDefault(t => t.Host == host && t.Port == port);

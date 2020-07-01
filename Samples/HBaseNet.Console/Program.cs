@@ -13,7 +13,7 @@ namespace HBaseNet.Console
 
     class Program
     {
-        public const string ZkQuorum = "hbase-docker";
+        private const string ZkQuorum = "hbase-docker";
         public const string Table = "student";
         public static Dictionary<string, string[]> Family;
         public static Dictionary<string, IDictionary<string, byte[]>> Values;

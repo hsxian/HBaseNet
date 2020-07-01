@@ -14,13 +14,11 @@ namespace HBaseNet.HRpc
         public MutationProto.Types.Durability Durability { get; set; } = MutationProto.Types.Durability.UseDefault;
         public MutationProto.Types.MutationType MutationType { get; set; }
 
-        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values,
-            MutationProto.Types.MutationType mutationType)
+        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values)
         {
             Table = table.ToUtf8Bytes();
             Key = key.ToUtf8Bytes();
             Values = values;
-            MutationType = mutationType;
         }
 
         public override string Name => "Mutate";

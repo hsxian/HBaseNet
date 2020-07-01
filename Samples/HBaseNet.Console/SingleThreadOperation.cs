@@ -30,8 +30,7 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values,
-                    MutationProto.Types.MutationType.Put));
+                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
             }
         }
 
@@ -59,8 +58,7 @@ namespace HBaseNet.Console
             foreach (var result in scanResults)
             {
                 var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).Single();
-                var delResult = await _client.Delete(new MutateCall(Program.Table, rowKey, null,
-                    MutationProto.Types.MutationType.Delete));
+                var delResult = await _client.Delete(new MutateCall(Program.Table, rowKey, null));
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
         }
@@ -68,8 +66,7 @@ namespace HBaseNet.Console
         public async Task ExecCheckAndPut()
         {
             var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-            var put = new MutateCall(Program.Table, rowKey, Program.Values,
-                MutationProto.Types.MutationType.Put)
+            var put = new MutateCall(Program.Table, rowKey, Program.Values)
             {
                 Key = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray()).ToUtf8Bytes()
             };

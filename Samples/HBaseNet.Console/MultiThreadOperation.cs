@@ -22,8 +22,7 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-                var rs = _client.Put(new MutateCall(Program.Table, rowKey, Program.Values,
-                    MutationProto.Types.MutationType.Put)
+                var rs = _client.Put(new MutateCall(Program.Table, rowKey, Program.Values)
                 {
                     Timestamp = new DateTime(2019, 1, 1, 1, 1, 1),
                 });

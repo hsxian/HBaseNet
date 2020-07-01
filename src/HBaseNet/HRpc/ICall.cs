@@ -1,6 +1,4 @@
-using System;
 using Google.Protobuf;
-using Pb;
 using RegionInfo = HBaseNet.Region.RegionInfo;
 
 namespace HBaseNet.HRpc

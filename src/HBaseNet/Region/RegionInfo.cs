@@ -1,7 +1,6 @@
 using System;
 using System.Buffers.Binary;
 using System.Linq;
-using System.Threading;
 using CSharpTest.Net.IO;
 using HBaseNet.Const;
 using HBaseNet.Utility;
@@ -11,6 +10,11 @@ namespace HBaseNet.Region
 {
     public class RegionInfo
     {
+        /// <summary>
+        /// A timestamp when the region is created
+        /// </summary>
+        public ulong ID { get; set; }
+
         public byte[] Table { get; set; }
 
         /// <summary>
@@ -23,6 +27,14 @@ namespace HBaseNet.Region
         public string Host { get; set; }
         public ushort Port { get; set; }
         public RegionClient Client { get; set; }
+
+        public RegionInfo(ulong id, byte[] table, byte[] name, byte[] startKey)
+        {
+            ID = id;
+            Table = table;
+            Name = name;
+            StartKey = startKey;
+        }
 
         public static byte[] CreateRegionSearchKey(byte[] table, byte[] key)
         {
@@ -106,14 +118,14 @@ namespace HBaseNet.Region
         public bool IsRegionOverlap(RegionInfo other)
         {
             return BinaryComparer.Equals(Table, other.Table)
-                   && BinaryComparer.Compare(StartKey, other.StopKey) < 0
-                   && BinaryComparer.Compare(StopKey, other.StartKey) > 0;
+                   && (other.StopKey?.Any() != true || BinaryComparer.Compare(StartKey, other.StopKey) < 0)
+                   && (StopKey?.Any() != true || BinaryComparer.Compare(StopKey, other.StartKey) > 0);
         }
 
         public override string ToString()
         {
             return
-                $"RegionInfo->Table: {Table.ToUtf8String()}, RegionName: {Name.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
+                $"RegionInfo->Name: {Name.ToUtf8String()}, ID: {ID}, Table: {Table.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
         }
 
         public static RegionInfo ParseFromCell(Cell cell)
@@ -126,11 +138,9 @@ namespace HBaseNet.Region
             if (magic != ConstInt.PBufMagic) return result;
             var reg = v[4..^4].TryParseTo(Pb.RegionInfo.Parser.ParseFrom);
             if (reg == null) return result;
-            result = new RegionInfo
+            result = new RegionInfo(reg.RegionId, reg.TableName.Qualifier.ToArray(), cell.Row.ToArray(),
+                reg.StartKey.ToArray())
             {
-                Table = reg.TableName.Qualifier.ToArray(),
-                Name = cell.Row.ToArray(),
-                StartKey = reg.StartKey.ToArray(),
                 StopKey = reg.EndKey.ToArray()
             };
             return result;
