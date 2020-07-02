@@ -24,9 +24,8 @@ namespace HBaseNet
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
-        private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
-        private List<RegionClient> ClientCache { get; }
         private volatile bool _isLocatingRegion;
+        private readonly RegionCache _cache;
 
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
@@ -47,8 +46,7 @@ namespace HBaseNet
             {
                 StopKey = new byte[0]
             };
-            KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
-            ClientCache = new List<RegionClient>();
+            _cache = new RegionCache();
         }
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
@@ -186,21 +184,8 @@ namespace HBaseNet
                 (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
                 if (reg != null)
                 {
-                    var os = GetOverlaps(reg);
-                    foreach (var item in os)
-                    {
-                        KeyInfoCache.TryRemove(item.Name, out _);
-                    }
-
-                    while (KeyInfoCache.ContainsKey(reg.Name) == false)
-                    {
-                        KeyInfoCache.TryAdd(reg.Name, reg);
-                    }
-
-                    if (ClientCache.Any(t => t.Host == reg.Host && t.Port == reg.Port) == false)
-                    {
-                        ClientCache.Add(client);
-                    }
+                    _cache.Add(reg);
+                    _cache.Add(reg, client);
                 }
             }
 
@@ -248,7 +233,7 @@ namespace HBaseNet
                         rpc.RetryCount++;
                         continue;
                     case TimeoutException _:
-                        ClientDown(rpc.Info);
+                        _cache.ClientDown(rpc.Info);
                         return null;
                     default:
                         return null;
@@ -258,15 +243,6 @@ namespace HBaseNet
             return null;
         }
 
-        private void ClientDown(RegionInfo reg)
-        {
-            if (reg == null) return;
-            var cs = ClientCache.Where(t => t.Host == reg.Host && t.Port == reg.Port).ToArray();
-            foreach (var c in cs)
-            {
-                ClientCache.Remove(c);
-            }
-        }
 
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(byte[] searchKey,
             CancellationToken token)
@@ -283,7 +259,7 @@ namespace HBaseNet
                     continue;
                 }
 
-                var client = GetRegionFromCache(reg.Host, reg.Port)
+                var client = _cache.GetClient(reg.Host, reg.Port)
                              ?? await new RegionClient(reg.Host, reg.Port, RegionType.ClientService)
                                  .Build(RetryCount, token);
                 reg.Client = client;
@@ -316,16 +292,11 @@ namespace HBaseNet
             return _metaClient != null;
         }
 
-        private RegionClient GetRegionFromCache(string host, ushort port)
-        {
-            return ClientCache.FirstOrDefault(t => t.Host == host && t.Port == port);
-        }
-
         private RegionInfo GetInfoFromCache(byte[] table, byte[] key)
         {
             if (BinaryEx.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
-            var (_, info) = KeyInfoCache.EnumerateFrom(search).FirstOrDefault();
+            var info = _cache.GetInfo(search);
             if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
             if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0) return null;
             _logger.LogDebug(
@@ -352,11 +323,6 @@ namespace HBaseNet
             }
 
             return result;
-        }
-
-        public RegionInfo[] GetOverlaps(RegionInfo reg)
-        {
-            return KeyInfoCache.Values.Where(t => t.IsRegionOverlap(reg)).ToArray();
         }
 
         public void Dispose()
