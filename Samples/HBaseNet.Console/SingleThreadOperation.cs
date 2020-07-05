@@ -37,14 +37,15 @@ namespace HBaseNet.Console
         public async Task ExecScan()
         {
             var sc =
-                new ScanCall(Program.Table, Program.Family, "1".ToUtf8Bytes(), "5".ToUtf8Bytes())
+                new ScanCall(Program.Table, Program.Family, "1".ToUtf8Bytes(), "".ToUtf8Bytes())
                 {
                     Families = Program.Family,
                     TimeRange = new TimeRange
                     {
                         From = new DateTime(2018,1,1).ToUnixU13(),
                         To = new DateTime(2019,1,2).ToUnixU13()
-                    }
+                    },
+                    NumberOfRows = 10000000
                 };
             var scanResults = await _client.Scan(sc);
             Log.Information($"scan result count:{scanResults.Count}");

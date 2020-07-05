@@ -48,8 +48,8 @@ namespace HBaseNet.HRpc
                     ClosestRowBefore = IsClosestBefore,
                     Filter = Filters?.ConvertToPBFilter(),
                     TimeRange = TimeRange,
-                    MaxVersions = MaxVersions
-                }
+                    MaxVersions = MaxVersions,
+                },
             };
 
             if (Families?.Any() == true)

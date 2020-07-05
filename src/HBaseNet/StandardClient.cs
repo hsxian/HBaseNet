@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using CSharpTest.Net.Collections;
 using CSharpTest.Net.IO;
 using Google.Protobuf;
 using HBaseNet.HRpc;
@@ -42,10 +41,7 @@ namespace HBaseNet
                 {"info", null}
             };
             _metaTableName = "hbase:meta".ToUtf8Bytes();
-            _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), new byte[0])
-            {
-                StopKey = new byte[0]
-            };
+            _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), null);
             _cache = new RegionCache();
         }
 
@@ -79,32 +75,38 @@ namespace HBaseNet
             var timeRange = scan.TimeRange;
             var maxVersion = scan.MaxVersions;
             var numberOfRows = scan.NumberOfRows;
-            do
+            while (true)
             {
+                var regionRowLimit = numberOfRows - results.Count;
                 rpc = new ScanCall(table, families, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
                 {
                     Filters = filters,
                     TimeRange = timeRange,
                     MaxVersions = maxVersion,
-                    NumberOfRows = numberOfRows,
+                    NumberOfRows = (uint) regionRowLimit,
                 };
                 scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
-                if (scanres?.Results?.Any() != true) break;
+                if (scanres == null) break;
                 results.AddRange(scanres.Results);
-                foreach (var item in scanres.Results)
+                while (scanres.Results?.Any() == true && results.Count < numberOfRows)
                 {
                     rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
                     scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
-                    if (scanres?.Results?.Any() != true) break;
+                    if (scanres.Results?.Any() != true) break;
                     results.AddRange(scanres.Results);
                 }
 
-                rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
-                scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
-                if (rpc.Info.StopKey?.Length == 0
-                    || stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.Info.StopKey) <= 0)
-                    return results;
-            } while (true);
+                rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, true);
+                await SendRPCToRegion<ScanResponse>(rpc, token);
+
+                if (results.Count >= numberOfRows
+                    || rpc.Info?.StopKey?.Any() != true
+                    || (stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.Info.StopKey) <= 0)
+                )
+                {
+                    break;
+                }
+            }
 
             return results;
         }
@@ -298,7 +300,7 @@ namespace HBaseNet
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
             if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
-            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0) return null;
+            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
             _logger.LogDebug(
                 $"get region info from cache, search key:{search.ToUtf8String()},match region name:{info.Name.ToUtf8String()}");
             return info;

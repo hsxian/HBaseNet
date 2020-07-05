@@ -22,7 +22,6 @@ namespace HBaseNet.Region
         public string Host { get; }
         public ushort Port { get; }
         private RegionType Type { get; }
-        private NetworkStream _conn;
         private Socket _socket;
         private int TimeOut { get; }
         private readonly ILogger<RegionClient> _logger;
@@ -57,8 +56,7 @@ namespace HBaseNet.Region
                 try
                 {
                     await _socket.ConnectAsync(ipAddress, Port);
-                    _conn = new NetworkStream(_socket, FileAccess.ReadWrite)
-                        {ReadTimeout = TimeOut, WriteTimeout = TimeOut};
+
                     _logger.LogInformation($"Connect to the RegionServer({Type}) at {Host}:{Port}");
                     return;
                 }
@@ -77,7 +75,6 @@ namespace HBaseNet.Region
         {
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             await TryConn(retryCount, token);
-            if (_conn == null) return null;
             _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
             _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
             _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
@@ -198,7 +195,11 @@ namespace HBaseNet.Region
         {
             try
             {
-                await _conn.WriteAsync(buf, token);
+                var count= await _socket.SendAsync(buf, SocketFlags.None);
+                if (count != buf.Length)
+                {
+                    _logger.LogError("The data was not sent completely.");
+                }
             }
             catch (Exception e) when (e is IOException)
             {
@@ -213,10 +214,21 @@ namespace HBaseNet.Region
         {
             try
             {
-                var rs = await _conn.ReadAsync(buf, token);
-                if (rs == 0)
+                var size = buf.Length;
+                var total = 0;
+                var dataLeft = size;
+
+                while (total < size)
                 {
-                    return new IOException("io not anything");
+                    await Task.CompletedTask;
+                    var recv = _socket.Receive(buf, total, dataLeft, SocketFlags.None);
+                    if (recv == 0)
+                    {
+                        break;
+                    }
+
+                    total += recv;
+                    dataLeft -= recv;
                 }
             }
             catch (Exception e)
@@ -269,7 +281,6 @@ namespace HBaseNet.Region
             headerData.CopyTo(buf, 5);
             payloadLen.CopyTo(buf, 5 + headerData.Length);
             payload.CopyTo(buf, 5 + headerData.Length + payloadLen.Length);
-
             return await Write(buf, token);
         }
 
@@ -279,8 +290,7 @@ namespace HBaseNet.Region
             var sz = new byte[4];
             result.Error = await ReadFully(sz, token);
             if (result.Error != null) return result;
-
-            var buf = new byte[BinaryPrimitives.ReadInt32BigEndian(sz)];
+            var buf = new byte[BinaryPrimitives.ReadUInt32BigEndian(sz)];
             result.Error = await ReadFully(buf, token);
             if (result.Error != null) return result;
 
@@ -331,7 +341,7 @@ namespace HBaseNet.Region
             else
             {
                 (respLen, nb) = ProtoBufEx.DecodeVarint(buf);
-                buf = buf[(int) nb..];
+                buf = buf[nb..];
                 result.Msg = rpc.ParseResponseFrom(buf);
                 buf = buf[(int) respLen..];
             }

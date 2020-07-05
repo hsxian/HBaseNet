@@ -38,19 +38,9 @@ namespace HBaseNet.HRpc
             Key = startRow;
         }
 
-        public ScanCall(string table, ulong? scannerID, byte[] startRow, bool closeScanner)
-        {
-            ScannerID = scannerID;
-            StartRow = startRow;
-            CloseScanner = closeScanner;
-            Table = table.ToUtf8Bytes();
-            Key = startRow;
-        }
-
         public ScanCall(byte[] table, ulong? scannerID, byte[] startRow, bool closeScanner)
         {
             ScannerID = scannerID;
-            StartRow = startRow;
             CloseScanner = closeScanner;
             Table = table;
             Key = startRow;
