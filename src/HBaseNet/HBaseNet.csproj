@@ -1,21 +1,23 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
+        <Version>0.1.0</Version>
+        <PackageId>HBaseNet</PackageId>
+        <Authors>hsxian</Authors>
+        <Product>HBaseNet</Product>
     </PropertyGroup>
-
     <ItemGroup>
-      <PackageReference Include="CSharpTest.Net.Collections-NetStd2" Version="14.906.1403.1084" />
-      <PackageReference Include="Google.Protobuf" Version="3.12.1" />
-      <PackageReference Include="Google.Protobuf.Tools" Version="3.12.1" />
-      <PackageReference Include="Grpc" Version="2.29.0" />
-      <PackageReference Include="Grpc.Tools" Version="2.29.0">
-        <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
-        <PrivateAssets>all</PrivateAssets>
-      </PackageReference>
-      <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="5.0.0-preview.4.20251.6" />
-      <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.4" />
-      <PackageReference Include="ZooKeeperNetEx" Version="3.4.12.4" />
+        <PackageReference Include="CSharpTest.Net.Collections-NetStd2" Version="14.906.1403.1084" />
+        <PackageReference Include="Google.Protobuf" Version="3.12.3" />
+        <PackageReference Include="Google.Protobuf.Tools" Version="3.12.3" />
+        <PackageReference Include="Grpc" Version="2.30.0" />
+        <PackageReference Include="Grpc.Tools" Version="2.30.0">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.5" />
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="3.1.5" />
+        <PackageReference Include="ZooKeeperNetEx" Version="3.4.12.4" />
     </ItemGroup>
     <ItemGroup>
         <Protobuf Include="..\..\Protos\Cell.proto" GrpcServices="Client" Link="Protos\Cell.proto" />

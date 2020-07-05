@@ -148,7 +148,7 @@ namespace HBaseNet.Region
 
         public static RegionInfo ParseFromGetResponse(GetResponse metaRow)
         {
-            if (metaRow?.HasResult != true) return null;
+            if (metaRow?.Result == null) return null;
 
             var regCell = metaRow.Result.Cell
                 .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));

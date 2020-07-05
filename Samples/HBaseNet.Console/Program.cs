@@ -54,7 +54,7 @@ namespace HBaseNet.Console
 
             if (await sto.CheckTable() == false)
             {
-                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {new ColumnFamily("default"),})
+                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
                 {
                     SplitKeys = Enumerable.Range(0, 10).Select(t => t.ToString()).ToArray()
                 };
@@ -75,7 +75,6 @@ namespace HBaseNet.Console
             sth.Restart();
             // await sto.ExecPut(putCount);
             // Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");
-
 
             sth.Restart();
             await sto.ExecScan();
