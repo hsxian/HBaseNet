@@ -1,5 +1,4 @@
 using System;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace HBaseNet
@@ -8,14 +7,7 @@ namespace HBaseNet
     {
         private static readonly Lazy<HBaseConfig> _lazy = new Lazy<HBaseConfig>(() => new HBaseConfig());
         public static HBaseConfig Instance => _lazy.Value;
-
-        public HBaseConfig()
-        {
-            ServiceProvider = new ServiceCollection()
-                .AddLogging()
-                .BuildServiceProvider();
-        }
-
+        
         public IServiceProvider ServiceProvider { get; set; }
         private ILoggerFactory _loggerFactory;
 

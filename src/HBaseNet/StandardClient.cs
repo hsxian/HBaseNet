@@ -23,7 +23,7 @@ namespace HBaseNet
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
-        private volatile bool _isLocatingRegion;
+        private bool _isLocatingRegion;
         private readonly RegionCache _cache;
 
         public async Task<IStandardClient> Build(CancellationToken? token = null)
@@ -83,7 +83,7 @@ namespace HBaseNet
                     Filters = filters,
                     TimeRange = timeRange,
                     MaxVersions = maxVersion,
-                    NumberOfRows = (uint) regionRowLimit,
+                    NumberOfRows = (uint)regionRowLimit,
                 };
                 scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
                 if (scanres == null) break;
@@ -149,7 +149,7 @@ namespace HBaseNet
             var res = await SendRPCToRegion<MutateResponse>(inc, token.Value);
             if (res?.Result?.Cell?.Count == 1)
             {
-                return (long) BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
+                return (long)BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
             }
 
             return null;
@@ -167,31 +167,33 @@ namespace HBaseNet
             await client.QueueRPC(rpc);
             return client;
         }
-
+        
         private async Task<(RegionClient client, RegionInfo info)> ResolveRegion(ICall rpc, CancellationToken token)
         {
-            var reg = GetInfoFromCache(rpc.Table, rpc.Key);
-            var client = reg?.Client;
-            if (client != null)
-                return (client, reg);
-
-            await TaskEx.WaitOn(() => _isLocatingRegion, 1, 20000);
-            _isLocatingRegion = true;
-
-            reg = GetInfoFromCache(rpc.Table, rpc.Key);
-            client = reg?.Client;
-
-            if (client == null || reg == null)
+            RegionInfo reg = null;
+            RegionClient client = null;
+            var millisecondsTimeout = 60000;
+            var oldTime = DateTime.Now;
+            do
             {
-                (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
-                if (reg != null)
+                reg = GetInfoFromCache(rpc.Table, rpc.Key);
+                client = reg?.Client;
+                if (client != null) break;
+                await Task.Delay(1);
+                if (_isLocatingRegion == false)
                 {
-                    _cache.Add(reg);
-                    _cache.Add(reg, client);
+                    _isLocatingRegion = true;
+                    (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
+                    if (client != null)
+                    {
+                        _cache.Add(reg);
+                        _cache.Add(reg, client);
+                    }
+                    _isLocatingRegion = false;
                 }
             }
+            while ((DateTime.Now - oldTime).TotalMilliseconds < millisecondsTimeout);
 
-            _isLocatingRegion = false;
             return (client, reg);
         }
 
@@ -286,7 +288,7 @@ namespace HBaseNet
             var meta = await TryLocateResource(ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom,
                 token);
 
-            _metaClient = await new RegionClient(meta.Server.HostName, (ushort) meta.Server.Port,
+            _metaClient = await new RegionClient(meta.Server.HostName, (ushort)meta.Server.Port,
                     RegionType.ClientService)
                 .Build(RetryCount, token);
             if (_metaClient != null)
@@ -296,13 +298,11 @@ namespace HBaseNet
 
         private RegionInfo GetInfoFromCache(byte[] table, byte[] key)
         {
-            if (BinaryEx.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
+            if (BinaryComparer.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
             if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
-            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
-            _logger.LogDebug(
-                $"get region info from cache, search key:{search.ToUtf8String()},match region name:{info.Name.ToUtf8String()}");
+            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0) return null;
             return info;
         }
 
@@ -310,7 +310,7 @@ namespace HBaseNet
             CancellationToken token)
         {
             var result = default(RegionInfo);
-            var getCall = new GetCall(_metaTableName, searchKey, true) {Families = _infoFamily, Info = _metaRegionInfo};
+            var getCall = new GetCall(_metaTableName, searchKey, true) { Families = _infoFamily, Info = _metaRegionInfo };
             await _metaClient.QueueRPC(getCall);
             var resp = await _metaClient.GetRPCResult(getCall.CallId);
 

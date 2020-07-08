@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.HRpc.Descriptors;
 using HBaseNet.Utility;
+using Microsoft.Extensions.DependencyInjection;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -22,13 +23,14 @@ namespace HBaseNet.Console
         {
             Log.Logger = new LoggerConfiguration()
                 .Enrich.FromLogContext()
-                .MinimumLevel.Debug()
+                .MinimumLevel.Information()
                 .WriteTo.Console(
                     outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss} {Level:u3}] {Message:lj}{NewLine}{Exception}")
                 .CreateLogger();
 
-            HBaseConfig.Instance.LoggerFactory
-                .AddSerilog(Log.Logger);
+            HBaseConfig.Instance.ServiceProvider = new ServiceCollection()
+                .AddLogging(cfg => cfg.AddSerilog(Log.Logger))
+                .BuildServiceProvider();
 
             Family = new Dictionary<string, string[]>
             {
@@ -46,7 +48,7 @@ namespace HBaseNet.Console
             var client = await new StandardClient(ZkQuorum).Build();
             var admin = await new AdminClient(ZkQuorum).Build();
             var ado = new AdminClientOperation(admin);
-            await ado.ExecAll();
+            // await ado.ExecAll();
 
 
             var sth = new Stopwatch();
@@ -56,7 +58,7 @@ namespace HBaseNet.Console
             {
                 var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
                 {
-                    SplitKeys = Enumerable.Range(0, 10).Select(t => t.ToString()).ToArray()
+                    SplitKeys = Enumerable.Range(0, 10).Select(t => $"{t}00").ToArray()
                 };
                 await admin.CreateTable(create);
             }
@@ -65,7 +67,7 @@ namespace HBaseNet.Console
 
             // await sto.ExecCheckAndPut();
 
-            const int putCount = 10000;
+            const int putCount = 1000000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();

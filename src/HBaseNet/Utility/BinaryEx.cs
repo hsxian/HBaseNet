@@ -30,20 +30,6 @@ namespace HBaseNet.Utility
             return result;
         }
 
-        public static int Compare(byte[] bytes1, byte[] bytes2)
-        {
-            if (bytes1.Length != bytes2.Length) return (bytes1.Length - bytes2.Length);
-            return Compare(bytes1, 0, bytes2, 0, Math.Min(bytes1.Length, bytes2.Length));
-        }
-
-        public static int Compare(byte[] bytes1, int offset1, byte[] bytes2, int offset2, int count)
-        {
-            var span1 = bytes1.AsSpan(offset1, count);
-            var span2 = bytes2.AsSpan(offset2, count);
-
-            return span1.SequenceCompareTo(span2);
-        }
-
         public static byte[] ToUtf8Bytes(this string str)
         {
             return Encoding.UTF8.GetBytes(str);
