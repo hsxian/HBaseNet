@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -23,9 +24,8 @@ namespace HBaseNet
         private readonly Dictionary<string, string[]> _infoFamily;
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
-        private bool _isLocatingRegion;
         private readonly RegionCache _cache;
-
+        private BlockingCollection<ICall> _loadRegionQueue;
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
@@ -43,6 +43,8 @@ namespace HBaseNet
             _metaTableName = "hbase:meta".ToUtf8Bytes();
             _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), null);
             _cache = new RegionCache();
+            _loadRegionQueue = new BlockingCollection<ICall>(30);
+            ProcessResolveRegionTask();
         }
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
@@ -167,33 +169,47 @@ namespace HBaseNet
             await client.QueueRPC(rpc);
             return client;
         }
-        
+        private void ProcessResolveRegionTask()
+        {
+            Task.Factory.StartNew(async () =>
+            {
+                while (DefaultCancellationSource.IsCancellationRequested == false)
+                {
+                    await Task.Delay(10);
+
+                    while (_loadRegionQueue.TryTake(out var rpc))
+                    {
+                        var reg1 = GetInfoFromCache(rpc.Table, rpc.Key);
+                        if (reg1?.Client != null) continue;
+                        var (client, reg) = await LocateRegion(rpc.Table, rpc.Key, DefaultCancellationSource.Token);
+                        if (client != null)
+                        {
+                            _cache.Add(reg);
+                            _cache.Add(reg, client);
+                        }
+
+                    }
+                }
+            }, TaskCreationOptions.LongRunning);
+        }
         private async Task<(RegionClient client, RegionInfo info)> ResolveRegion(ICall rpc, CancellationToken token)
         {
             RegionInfo reg = null;
             RegionClient client = null;
             var millisecondsTimeout = 60000;
             var oldTime = DateTime.Now;
-            do
+            reg = GetInfoFromCache(rpc.Table, rpc.Key);
+            client = reg?.Client;
+            if (client == null)
             {
-                reg = GetInfoFromCache(rpc.Table, rpc.Key);
-                client = reg?.Client;
-                if (client != null) break;
-                await Task.Delay(1);
-                if (_isLocatingRegion == false)
+                _loadRegionQueue.Add(rpc);
+                await TaskEx.WaitOn(() =>
                 {
-                    _isLocatingRegion = true;
-                    (client, reg) = await LocateRegion(rpc.Table, rpc.Key, token);
-                    if (client != null)
-                    {
-                        _cache.Add(reg);
-                        _cache.Add(reg, client);
-                    }
-                    _isLocatingRegion = false;
-                }
+                    reg = GetInfoFromCache(rpc.Table, rpc.Key);
+                    client = reg?.Client;
+                    return client == null;
+                }, 10, millisecondsTimeout);
             }
-            while ((DateTime.Now - oldTime).TotalMilliseconds < millisecondsTimeout);
-
             return (client, reg);
         }
 
