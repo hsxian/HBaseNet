@@ -15,7 +15,7 @@ namespace HBaseNet
         protected TimeSpan BackoffStart { get; set; } = TimeSpan.FromMilliseconds(16);
         protected TimeSpan BackoffIncrease { get; set; } = TimeSpan.FromSeconds(5);
         protected TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
-        protected int RetryCount { get; set; } = 9;
+        protected int RetryCount { get; set; } = 5;
         protected CancellationTokenSource DefaultCancellationSource { get; }
         
         protected CommonClient()

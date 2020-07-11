@@ -17,6 +17,7 @@ namespace HBaseNet.Region.Exceptions
             {"org.apache.hadoop.hbase.exceptions.RegionMovedException", typeof(RetryableException)},
             {"org.apache.hadoop.hbase.exceptions.RegionOpeningException", typeof(RetryableException)},
             {"org.apache.hadoop.hbase.CallQueueTooBigException", typeof(CallQueueTooBigException)},
+            {"org.apache.hadoop.hbase.DoNotRetryIOException", typeof(DoNotRetryIOException)},
             {"", typeof(Exception)},
         };
     }

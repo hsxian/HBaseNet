@@ -366,6 +366,11 @@ namespace HBaseNet.Region
             {
                 result.Error = new RetryableException(errStr);
             }
+            else if (ExceptionMap.IsMatch<DoNotRetryIOException>(exception.ExceptionClassName))
+            {
+                result.Error = new DoNotRetryIOException(errStr);
+                _logger.LogError($"{errStr}");
+            }
             else
             {
                 result.Error = new Exception(errStr);

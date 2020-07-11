@@ -48,7 +48,7 @@ namespace HBaseNet.Console
             var client = await new StandardClient(ZkQuorum).Build();
             var admin = await new AdminClient(ZkQuorum).Build();
             var ado = new AdminClientOperation(admin);
-            // await ado.ExecAll();
+            await ado.ExecAll();
 
 
             var sth = new Stopwatch();
@@ -67,7 +67,7 @@ namespace HBaseNet.Console
 
             // await sto.ExecCheckAndPut();
 
-            const int putCount = 1000000;
+            const int putCount = 100000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();

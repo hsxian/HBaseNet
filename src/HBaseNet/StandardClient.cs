@@ -255,6 +255,8 @@ namespace HBaseNet
                     case TimeoutException _:
                         _cache.ClientDown(rpc.Info);
                         return null;
+                    case DoNotRetryIOException _:
+                        return null;
                     default:
                         return null;
                 }
@@ -262,7 +264,6 @@ namespace HBaseNet
 
             return null;
         }
-
 
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(byte[] searchKey,
             CancellationToken token)
@@ -303,6 +304,8 @@ namespace HBaseNet
             if (_metaClient != null) return true;
             var meta = await TryLocateResource(ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom,
                 token);
+
+            if (meta == null) return false;
 
             _metaClient = await new RegionClient(meta.Server.HostName, (ushort)meta.Server.Port,
                     RegionType.ClientService)

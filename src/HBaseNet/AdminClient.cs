@@ -3,6 +3,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Region;
+using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
 using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
@@ -32,7 +33,7 @@ namespace HBaseNet
             var master = await TryLocateResource(ZkHelper.HBaseMaster, Master.Parser.ParseFrom,
                 token);
 
-            _adminClient = await new RegionClient(master.Master_.HostName, (ushort) master.Master_.Port,
+            _adminClient = await new RegionClient(master.Master_.HostName, (ushort)master.Master_.Port,
                     RegionType.MasterService)
                 .Build(RetryCount, token);
             if (_adminClient != null)
@@ -50,7 +51,10 @@ namespace HBaseNet
                 var req = new GetProcedureStateCall(procId);
                 await _adminClient.QueueRPC(req);
                 var res = await _adminClient.GetRPCResult(req.CallId);
-                if (res?.Msg is GetProcedureResultResponse rep)
+                if (res == null) return false;
+
+                if (res.Msg is GetProcedureResultResponse rep)
+                {
                     switch (rep.State)
                     {
                         case GetProcedureResultResponse.Types.State.NotFound:
@@ -58,7 +62,15 @@ namespace HBaseNet
                         case GetProcedureResultResponse.Types.State.Finished:
                             return true;
                     }
-
+                }
+                else if (res.Error != null)
+                {
+                    switch (res.Error)
+                    {
+                        case DoNotRetryIOException _:
+                            return false;
+                    }
+                }
                 backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
             }
 
