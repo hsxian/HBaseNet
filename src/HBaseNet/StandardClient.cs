@@ -181,13 +181,13 @@ namespace HBaseNet
                     {
                         var reg1 = GetInfoFromCache(rpc.Table, rpc.Key);
                         if (reg1?.Client != null) continue;
-                        var (client, reg) = await LocateRegion(rpc.Table, rpc.Key, DefaultCancellationSource.Token);
+
+                        var (client, reg) = await TryLocateRegion(rpc, DefaultCancellationSource.Token);
                         if (client != null)
                         {
                             _cache.Add(reg);
                             _cache.Add(reg, client);
                         }
-
                     }
                 }
             }, TaskCreationOptions.LongRunning);
@@ -207,7 +207,7 @@ namespace HBaseNet
                 {
                     reg = GetInfoFromCache(rpc.Table, rpc.Key);
                     client = reg?.Client;
-                    return client == null;
+                    return client == null && rpc.FindRegionRetryCount < RetryCount;
                 }, 10, millisecondsTimeout);
             }
             return (client, reg);
@@ -265,17 +265,18 @@ namespace HBaseNet
             return null;
         }
 
-        private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(byte[] searchKey,
-            CancellationToken token)
+        private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(ICall rpc, CancellationToken token)
         {
             var backoff = BackoffStart;
-            for (var i = 0; i < RetryCount && token.IsCancellationRequested == false; i++)
+            var searchKey = RegionInfo.CreateRegionSearchKey(rpc.Table, rpc.Key);
+            while (rpc.FindRegionRetryCount < RetryCount && token.IsCancellationRequested == false)
             {
+                rpc.FindRegionRetryCount++;
                 var reg = await FindRegionInfoForRPC(searchKey, token);
                 if (reg == null)
                 {
                     _logger.LogWarning(
-                        $"Locate region failed in {i + 1}th，try the locate again after {backoff}.");
+                        $"Locate region failed in {rpc.FindRegionRetryCount}th，try the locate again after {backoff}.");
                     backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                     continue;
                 }
@@ -286,18 +287,8 @@ namespace HBaseNet
                 reg.Client = client;
                 return (client, reg);
             }
-
             return (null, null);
         }
-
-        private async Task<(RegionClient client, RegionInfo info)> LocateRegion(byte[] table, byte[] key,
-            CancellationToken token)
-        {
-            var searchKey = RegionInfo.CreateRegionSearchKey(table, key);
-            var result = await TryLocateRegion(searchKey, token);
-            return result;
-        }
-
 
         protected async Task<bool> LocateMetaClient(CancellationToken token)
         {
