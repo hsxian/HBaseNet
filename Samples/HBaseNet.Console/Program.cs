@@ -78,6 +78,9 @@ namespace HBaseNet.Console
             await sto.ExecPut(putCount / 100);
             Log.Logger.Information($"exec single thread put ,count: {putCount / 100},take :{sth.Elapsed}");
 
+            await sto.ExecAppend();
+            await sto.ExecIncrement();
+
             sth.Restart();
             await sto.ExecScan();
             Log.Logger.Information($"exec scan,take :{sth.Elapsed}");

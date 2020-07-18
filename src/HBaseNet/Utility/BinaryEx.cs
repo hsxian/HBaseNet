@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System;
 using System.Linq;
 using System.Text;
@@ -43,6 +44,13 @@ namespace HBaseNet.Utility
         public static int GetHash(this byte[] arr)
         {
             return arr?.Any() != true ? 0 : arr.Aggregate(17, (current, @by) => current << 31 + @by);
+        }
+
+        public static byte[] GetBigEndianBytes(long v)
+        {
+            var r = new byte[8];
+            BinaryPrimitives.WriteInt64BigEndian(r, v);
+            return r;
         }
     }
 }

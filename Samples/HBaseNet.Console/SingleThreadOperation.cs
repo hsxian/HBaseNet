@@ -1,4 +1,6 @@
 using System;
+using System.Buffers.Binary;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,6 +19,11 @@ namespace HBaseNet.Console
             _client = client;
         }
 
+        public string GenerateRandomKey()
+        {
+            return new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
+        }
+
         public async Task<bool> CheckTable()
         {
             var result = await _client.CheckTable(Program.Table);
@@ -28,7 +35,7 @@ namespace HBaseNet.Console
         {
             for (var i = 0; i < count; i++)
             {
-                var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
+                var rowKey = GenerateRandomKey();
                 var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
             }
         }
@@ -61,10 +68,59 @@ namespace HBaseNet.Console
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
         }
-
+        public async Task ExecAppend()
+        {
+            var rowKey = GenerateRandomKey();
+            var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
+            var v = new Dictionary<string, IDictionary<string, byte[]>>
+            {
+                {
+                    "default", new Dictionary<string, byte[]>
+                    {
+                        {"key", " append".ToUtf8Bytes()}
+                    }
+                }
+            };
+            rs = await _client.Append(new MutateCall(Program.Table, rowKey, v));
+            var upRs = await _client.Get(new GetCall(Program.Table, rowKey));
+            var newV = upRs.Result.Cell[0].Value.ToStringUtf8();
+            if ("value append" == newV)
+            {
+                Log.Information($"append at key:{rowKey} ,success");
+            }
+            else
+            {
+                Log.Information($"append at key:{rowKey} ,failed");
+            }
+        }
+        public async Task ExecIncrement()
+        {
+            var rowKey = GenerateRandomKey();
+            var v = new Dictionary<string, IDictionary<string, byte[]>>
+            {
+                {
+                    "default", new Dictionary<string, byte[]>
+                    {
+                        {"key",null}
+                    }
+                }
+            };
+            v["default"]["key"] = BinaryEx.GetBigEndianBytes(1L);
+            var rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
+            v["default"]["key"] = BinaryEx.GetBigEndianBytes(5L);
+            rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
+            if (6 == rs)
+            {
+                Log.Information($"increment at key:{rowKey} ,success");
+            }
+            else
+            {
+                Log.Information($"increment at key:{rowKey} ,failed");
+            }
+        }
         public async Task ExecCheckAndPut()
         {
-            var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
+            var rowKey = GenerateRandomKey();
             var put = new MutateCall(Program.Table, rowKey, Program.Values);
             var result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
             Log.Information($"check and put key:{rowKey},result:{result}");
