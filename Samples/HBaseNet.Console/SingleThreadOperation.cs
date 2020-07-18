@@ -83,8 +83,10 @@ namespace HBaseNet.Console
             };
             rs = await _client.Append(new MutateCall(Program.Table, rowKey, v));
             var upRs = await _client.Get(new GetCall(Program.Table, rowKey));
+            rs = await _client.Append(new MutateCall(Program.Table, rowKey, "default", "key", " append"));
+            upRs = await _client.Get(new GetCall(Program.Table, rowKey));
             var newV = upRs.Result.Cell[0].Value.ToStringUtf8();
-            if ("value append" == newV)
+            if ("value append append" == newV)
             {
                 Log.Information($"append at key:{rowKey} ,success");
             }
@@ -107,8 +109,7 @@ namespace HBaseNet.Console
             };
             v["default"]["key"] = BinaryEx.GetBigEndianBytes(1L);
             var rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
-            v["default"]["key"] = BinaryEx.GetBigEndianBytes(5L);
-            rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
+            rs = await _client.Increment(new MutateCall(Program.Table, rowKey, "default", "key", 5L));
             if (6 == rs)
             {
                 Log.Information($"increment at key:{rowKey} ,success");

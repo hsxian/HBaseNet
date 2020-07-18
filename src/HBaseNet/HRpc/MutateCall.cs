@@ -24,6 +24,32 @@ namespace HBaseNet.HRpc
             Key = key;
             Values = values;
         }
+        public MutateCall(byte[] table, byte[] key, string family, string qualifier, long increment)
+        {
+            Table = table;
+            Key = key;
+            Values = new Dictionary<string, IDictionary<string, byte[]>>
+            {
+                {family,  new Dictionary<string ,byte[]> {{qualifier,BinaryEx.GetBigEndianBytes(increment)}}}
+            };
+        }
+        public MutateCall(string table, string key, string family, string qualifier, long increment)
+            : this(table.ToUtf8Bytes(), key.ToUtf8Bytes(), family, qualifier, increment)
+        {
+        }
+        public MutateCall(byte[] table, byte[] key, string family, string qualifier, string append)
+        {
+            Table = table;
+            Key = key;
+            Values = new Dictionary<string, IDictionary<string, byte[]>>
+            {
+                {family,  new Dictionary<string ,byte[]> {{qualifier,append.ToUtf8Bytes()}}}
+            };
+        }
+        public MutateCall(string table, string key, string family, string qualifier, string append)
+            : this(table.ToUtf8Bytes(), key.ToUtf8Bytes(), family, qualifier, append)
+        {
+        }
 
         public override string Name => "Mutate";
 
