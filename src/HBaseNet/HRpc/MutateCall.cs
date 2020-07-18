@@ -15,9 +15,13 @@ namespace HBaseNet.HRpc
         public MutationProto.Types.MutationType MutationType { get; set; }
 
         public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values)
+            : this(table.ToUtf8Bytes(), key.ToUtf8Bytes(), values)
         {
-            Table = table.ToUtf8Bytes();
-            Key = key.ToUtf8Bytes();
+        }
+        public MutateCall(byte[] table, byte[] key, IDictionary<string, IDictionary<string, byte[]>> values)
+        {
+            Table = table;
+            Key = key;
             Values = values;
         }
 

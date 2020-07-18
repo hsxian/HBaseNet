@@ -13,10 +13,11 @@ namespace HBaseNet.Comparator
 
         public Pb.ByteArrayComparable ConvertToPB()
         {
-            var pbVersion = new Pb.ByteArrayComparable
+            var pbVersion = new Pb.ByteArrayComparable();
+            if (Value != null)
             {
-                Value = ByteString.CopyFrom(Value)
-            };
+                pbVersion.Value = ByteString.CopyFrom(Value);
+            }
             return pbVersion;
         }
     }

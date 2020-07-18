@@ -2,24 +2,22 @@ using System;
 using Google.Protobuf;
 using HBaseNet.Utility;
 using Pb;
+using static Pb.MutationProto.Types;
 using BinaryComparator = HBaseNet.Comparator.BinaryComparator;
 using ByteArrayComparable = HBaseNet.Comparator.ByteArrayComparable;
 
 namespace HBaseNet.HRpc
 {
-    public class CheckAndPutCall : BaseCall
+    public class CheckAndPutCall : MutateCall
     {
-        public MutateCall Put { get; }
         public string Family { get; }
         public string Qualifier { get; }
         public byte[] ExpectedValue { get; }
-        public override string Name { get; } = "CheckAndPut";
 
         public CheckAndPutCall(MutateCall put, string family, string qualifier, byte[] expectedValue)
+            : base(put.Table, put.Key, put.Values)
         {
-            if (put.MutationType != Pb.MutationProto.Types.MutationType.Put)
-                throw new InvalidOperationException("put.MutationType != MutationProto.Types.MutationType.Put");
-            Put = put;
+            MutationType = MutationType.Put;
             Key = put.Key;
             Table = put.Table;
             Family = family;
@@ -32,7 +30,7 @@ namespace HBaseNet.HRpc
             var bac = new ByteArrayComparable(ExpectedValue);
             var cmp = new BinaryComparator(bac.ConvertToPB());
             var comparator = cmp.ConvertToPBComparator();
-            var mutateRequest = Put.SerializeToProto();
+            var mutateRequest = SerializeToProto();
             mutateRequest.Condition = new Condition
             {
                 Row = ByteString.CopyFrom(Key),

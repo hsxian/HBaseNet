@@ -44,8 +44,9 @@ namespace HBaseNet.Region
 
         public void Add(RegionInfo info)
         {
-            var os = GetOverlaps(info).Where(t => t.ID < info.ID);
-            Remove(os);
+            //TODO:
+            // var os = GetOverlaps(info).Where(t => t.ID < info.ID);
+            // Remove(os);
 
             while (KeyInfoCache.ContainsKey(info.Name) == false)
             {
@@ -53,9 +54,9 @@ namespace HBaseNet.Region
             }
         }
 
-        public void Add(RegionInfo info, RegionClient client)
+        public void Add(RegionClient client)
         {
-            if (ClientCache.Any(t => t.Host == info.Host && t.Port == info.Port) == false)
+            if (ClientCache.Any(t => t.Host == client.Host && t.Port == client.Port) == false)
             {
                 ClientCache.Add(client);
             }

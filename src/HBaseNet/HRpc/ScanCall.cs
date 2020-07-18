@@ -1,8 +1,6 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
-using Google.Protobuf.WellKnownTypes;
 using HBaseNet.Utility;
 using Pb;
 
@@ -20,21 +18,15 @@ namespace HBaseNet.HRpc
         public uint MaxVersions { get; set; } = 1;
         public uint NumberOfRows { get; set; } = 128;
 
-        public ScanCall(string table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
+        public ScanCall(string table, byte[] startRow, byte[] stopRow) : this(table.ToUtf8Bytes(), startRow, stopRow)
         {
-            StartRow = startRow;
-            StopRow = stopRow;
-            Families = families;
-            Table = table.ToUtf8Bytes();
-            Key = startRow;
         }
 
-        public ScanCall(byte[] table, IDictionary<string, string[]> families, byte[] startRow, byte[] stopRow)
+        public ScanCall(byte[] table, byte[] startRow, byte[] stopRow)
         {
+            Table = table;
             StartRow = startRow;
             StopRow = stopRow;
-            Families = families;
-            Table = table;
             Key = startRow;
         }
 

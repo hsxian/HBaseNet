@@ -32,7 +32,7 @@ namespace HBaseNet.HRpc
         protected IEnumerable<Column> ConvertToColumns(IDictionary<string, string[]> families)
         {
             var columns = families
-                .Select(t =>
+                ?.Select(t =>
                 {
                     var col = new Column
                     {

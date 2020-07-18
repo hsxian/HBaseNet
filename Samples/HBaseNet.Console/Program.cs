@@ -65,9 +65,9 @@ namespace HBaseNet.Console
 
             if (await sto.CheckTable() == false) return;
 
-            // await sto.ExecCheckAndPut();
+            await sto.ExecCheckAndPut();
 
-            const int putCount = 100000;
+            const int putCount = 10000;
 
             var mto = new MultiThreadOperation(client);
             sth.Restart();
@@ -75,8 +75,8 @@ namespace HBaseNet.Console
             Log.Logger.Information($"exec multi thread put ,count: {putCount},take :{sth.Elapsed}");
 
             sth.Restart();
-            // await sto.ExecPut(putCount);
-            // Log.Logger.Information($"exec single thread put ,count: {putCount},take :{sth.Elapsed}");
+            await sto.ExecPut(putCount / 100);
+            Log.Logger.Information($"exec single thread put ,count: {putCount / 100},take :{sth.Elapsed}");
 
             sth.Restart();
             await sto.ExecScan();

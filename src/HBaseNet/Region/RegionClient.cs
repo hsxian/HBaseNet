@@ -38,6 +38,10 @@ namespace HBaseNet.Region
             Port = port;
             Type = type;
             TimeOut = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
+            _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
+            _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
+            _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
+            _defaultCancellationSource = new CancellationTokenSource();
         }
 
         private int GetNextCallId()
@@ -75,10 +79,6 @@ namespace HBaseNet.Region
         {
             _socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
             await TryConn(retryCount, token);
-            _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
-            _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
-            _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
-            _defaultCancellationSource = new CancellationTokenSource();
             if (false == await SendHello(Type)) return null;
             ProcessRPCs();
             ReceiveRPCs();
@@ -96,7 +96,20 @@ namespace HBaseNet.Region
                 }
             }, TaskCreationOptions.LongRunning);
         }
+        public async Task QueueRPC(ICall rpc)
+        {
+            rpc.CallId = (uint)GetNextCallId();
+            var send = new RPCSend
+            {
+                RPC = rpc
+            };
+            while (_rpcQueue.TryAdd(send) == false)
+            {
+                await Task.Delay(1);
+            }
 
+            send.QueueTime = DateTime.Now;
+        }
         private void ProcessRPCs()
         {
             Task.Factory.StartNew(async () =>
@@ -104,7 +117,6 @@ namespace HBaseNet.Region
                 while (_defaultCancellationSource.IsCancellationRequested == false)
                 {
                     await Task.Delay(10);
-
                     while (_rpcQueue.TryTake(out var rpc))
                     {
                         //TODO:CancellationToken
@@ -238,22 +250,6 @@ namespace HBaseNet.Region
             }
 
             return null;
-        }
-
-        public async Task QueueRPC(ICall rpc)
-        {
-            rpc.CallId = (uint)GetNextCallId();
-            var send = new RPCSend
-            {
-                RPC = rpc
-            };
-            while (_rpcQueue.TryAdd(send) == false)
-            {
-                // await Task.Delay(1);
-                await Task.Yield();
-            }
-
-            send.QueueTime = DateTime.Now;
         }
 
         private async Task<bool> SendRPC(RPCSend send, CancellationToken token)

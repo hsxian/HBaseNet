@@ -80,8 +80,9 @@ namespace HBaseNet
             while (true)
             {
                 var regionRowLimit = numberOfRows - results.Count;
-                rpc = new ScanCall(table, families, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
+                rpc = new ScanCall(table, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
                 {
+                    Families = families,
                     Filters = filters,
                     TimeRange = timeRange,
                     MaxVersions = maxVersion,
@@ -186,7 +187,7 @@ namespace HBaseNet
                         if (client != null)
                         {
                             _cache.Add(reg);
-                            _cache.Add(reg, client);
+                            _cache.Add(client);
                         }
                     }
                 }
@@ -302,7 +303,10 @@ namespace HBaseNet
                     RegionType.ClientService)
                 .Build(RetryCount, token);
             if (_metaClient != null)
+            {
+                _cache.Add(_metaClient);
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
+            }
             return _metaClient != null;
         }
 
@@ -312,7 +316,7 @@ namespace HBaseNet
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
             if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
-            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) > 0) return null;
+            if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
             return info;
         }
 

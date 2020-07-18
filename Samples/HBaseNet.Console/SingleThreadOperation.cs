@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
-using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -36,14 +35,14 @@ namespace HBaseNet.Console
 
         public async Task ExecScan()
         {
-            var sc = new ScanCall(Program.Table, Program.Family, "0".ToUtf8Bytes(), "".ToUtf8Bytes())
+            var sc = new ScanCall(Program.Table, "0".ToUtf8Bytes(), "".ToUtf8Bytes())
             {
-                Families = Program.Family,
-                TimeRange = new TimeRange
-                {
-                    From = new DateTime(2018, 1, 1).ToUnixU13(),
-                    To = new DateTime(2019, 1, 2).ToUnixU13()
-                },
+                // Families = Program.Family,
+                // TimeRange = new TimeRange
+                // {
+                //     From = new DateTime(2018, 1, 1).ToUnixU13(),
+                //     To = new DateTime(2019, 1, 2).ToUnixU13()
+                // },
                 NumberOfRows = 10000000
             };
             var scanResults = await _client.Scan(sc);
@@ -53,7 +52,7 @@ namespace HBaseNet.Console
         public async Task ExecScanAndDelete()
         {
             var scanResults =
-                await _client.Scan(new ScanCall(Program.Table, Program.Family, "0".ToUtf8Bytes(), "1".ToUtf8Bytes()) { NumberOfRows = 1 });
+                await _client.Scan(new ScanCall(Program.Table, "0".ToUtf8Bytes(), "1".ToUtf8Bytes()) { NumberOfRows = 1 });
             Log.Information($"scan result count:{scanResults.Count}");
             foreach (var result in scanResults)
             {
@@ -66,12 +65,11 @@ namespace HBaseNet.Console
         public async Task ExecCheckAndPut()
         {
             var rowKey = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-            var put = new MutateCall(Program.Table, rowKey, Program.Values)
-            {
-                Key = new string(DateTime.Now.Ticks.ToString().Reverse().ToArray()).ToUtf8Bytes()
-            };
-
-            var resultT = await _client.CheckAndPut(put, "default", "key", "ex".ToUtf8Bytes(), new CancellationToken());
+            var put = new MutateCall(Program.Table, rowKey, Program.Values);
+            var result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
+            Log.Information($"check and put key:{rowKey},result:{result}");
+            result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
+            Log.Information($"check and put key:{rowKey} again,result:{result}");
         }
     }
 }
