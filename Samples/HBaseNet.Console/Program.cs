@@ -18,7 +18,10 @@ namespace HBaseNet.Console
         public const string Table = "student";
         public static Dictionary<string, string[]> Family;
         public static Dictionary<string, IDictionary<string, byte[]>> Values;
-
+        public static string GenerateRandomKey()
+        {
+            return Guid.NewGuid().ToString();
+        }
         static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
@@ -58,7 +61,7 @@ namespace HBaseNet.Console
             {
                 var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
                 {
-                    SplitKeys = Enumerable.Range(0, 10).Select(t => $"{t}00").ToArray()
+                    SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}").ToArray()
                 };
                 await admin.CreateTable(create);
             }

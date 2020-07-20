@@ -19,11 +19,6 @@ namespace HBaseNet.Console
             _client = client;
         }
 
-        public string GenerateRandomKey()
-        {
-            return new string(DateTime.Now.Ticks.ToString().Reverse().ToArray());
-        }
-
         public async Task<bool> CheckTable()
         {
             var result = await _client.CheckTable(Program.Table);
@@ -35,7 +30,7 @@ namespace HBaseNet.Console
         {
             for (var i = 0; i < count; i++)
             {
-                var rowKey = GenerateRandomKey();
+                var rowKey = Program.GenerateRandomKey();
                 var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
             }
         }
@@ -70,7 +65,7 @@ namespace HBaseNet.Console
         }
         public async Task ExecAppend()
         {
-            var rowKey = GenerateRandomKey();
+            var rowKey = Program.GenerateRandomKey();
             var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
             var v = new Dictionary<string, IDictionary<string, byte[]>>
             {
@@ -97,7 +92,7 @@ namespace HBaseNet.Console
         }
         public async Task ExecIncrement()
         {
-            var rowKey = GenerateRandomKey();
+            var rowKey = Program.GenerateRandomKey();
             var v = new Dictionary<string, IDictionary<string, byte[]>>
             {
                 {
@@ -121,7 +116,7 @@ namespace HBaseNet.Console
         }
         public async Task ExecCheckAndPut()
         {
-            var rowKey = GenerateRandomKey();
+            var rowKey = Program.GenerateRandomKey();
             var put = new MutateCall(Program.Table, rowKey, Program.Values);
             var result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
             Log.Information($"check and put key:{rowKey},result:{result}");

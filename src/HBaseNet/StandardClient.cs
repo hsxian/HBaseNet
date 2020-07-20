@@ -25,7 +25,7 @@ namespace HBaseNet
         private readonly RegionInfo _metaRegionInfo;
         private RegionClient _metaClient;
         private readonly RegionCache _cache;
-        private BlockingCollection<ICall> _loadRegionQueue;
+        private ConcurrentQueue<ICall> _loadRegionQueue;
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
@@ -43,7 +43,7 @@ namespace HBaseNet
             _metaTableName = "hbase:meta".ToUtf8Bytes();
             _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), null);
             _cache = new RegionCache();
-            _loadRegionQueue = new BlockingCollection<ICall>(30);
+            _loadRegionQueue = new ConcurrentQueue<ICall>();
             ProcessResolveRegionTask();
         }
 
@@ -178,7 +178,7 @@ namespace HBaseNet
                 {
                     await Task.Delay(10);
 
-                    while (_loadRegionQueue.TryTake(out var rpc))
+                    while (_loadRegionQueue.TryDequeue(out var rpc))
                     {
                         var reg1 = GetInfoFromCache(rpc.Table, rpc.Key);
                         if (reg1?.Client != null) continue;
@@ -203,13 +203,13 @@ namespace HBaseNet
             client = reg?.Client;
             if (client == null)
             {
-                _loadRegionQueue.Add(rpc);
+                _loadRegionQueue.Enqueue(rpc);
                 await TaskEx.WaitOn(() =>
                 {
                     reg = GetInfoFromCache(rpc.Table, rpc.Key);
                     client = reg?.Client;
                     return client == null && rpc.FindRegionRetryCount < RetryCount;
-                }, 10, millisecondsTimeout);
+                }, 5, millisecondsTimeout);
             }
             return (client, reg);
         }
@@ -304,7 +304,7 @@ namespace HBaseNet
                 .Build(RetryCount, token);
             if (_metaClient != null)
             {
-                _cache.Add(_metaClient);
+                // _cache.Add(_metaClient);
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
             }
             return _metaClient != null;
