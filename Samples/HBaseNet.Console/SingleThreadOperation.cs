@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using BitConverter;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
 using Serilog;
@@ -102,7 +103,7 @@ namespace HBaseNet.Console
                     }
                 }
             };
-            v["default"]["key"] = BinaryEx.GetBigEndianBytes(1L);
+            v["default"]["key"] = EndianBitConverter.BigEndian.GetBytes(1L);
             var rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
             rs = await _client.Increment(new MutateCall(Program.Table, rowKey, "default", "key", 5L));
             if (6 == rs)

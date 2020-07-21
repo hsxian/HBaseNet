@@ -7,6 +7,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using BitConverter;
 using Google.Protobuf;
 using HBaseNet.HRpc;
 using HBaseNet.Region.Exceptions;
@@ -197,7 +198,7 @@ namespace HBaseNet.Region
             var header = "HBas\x00\x50".ToUtf8Bytes(); // \x50 = Simple Auth.
             var buf = new byte[header.Length + 4 + data.Length];
             header.CopyTo(buf, 0);
-            var dataLenBig = BitConverter.GetBytes(BinaryPrimitives.ReverseEndianness((uint)data.Length));
+            var dataLenBig = EndianBitConverter.BigEndian.GetBytes((uint)data.Length);
             dataLenBig.CopyTo(buf, 6);
             data.CopyTo(buf, header.Length + 4);
             return Write(buf, new CancellationToken());

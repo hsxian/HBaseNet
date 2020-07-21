@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BitConverter;
 using Google.Protobuf;
 using HBaseNet.Utility;
 using Pb;
@@ -30,7 +31,7 @@ namespace HBaseNet.HRpc
             Key = key;
             Values = new Dictionary<string, IDictionary<string, byte[]>>
             {
-                {family,  new Dictionary<string ,byte[]> {{qualifier,BinaryEx.GetBigEndianBytes(increment)}}}
+                {family,  new Dictionary<string ,byte[]> {{qualifier,EndianBitConverter.BigEndian.GetBytes(increment)}}}
             };
         }
         public MutateCall(string table, string key, string family, string qualifier, long increment)
