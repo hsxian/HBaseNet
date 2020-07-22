@@ -9,5 +9,6 @@ namespace HBaseNet.Const
         public const string DefaultZkRoot = "/hbase";
         public const string Master = "/master";
         public const string MetaRegion = "/meta-region-server";
+        public const string DefaultEffectiveUser = "root";
     }
 }

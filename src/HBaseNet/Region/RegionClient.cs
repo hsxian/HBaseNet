@@ -190,7 +190,7 @@ namespace HBaseNet.Region
             {
                 UserInfo = new UserInformation
                 {
-                    EffectiveUser = "gopher"
+                    EffectiveUser = HBaseConfig.Instance.EffectiveUser
                 },
                 ServiceName = type.ToString()
             };
