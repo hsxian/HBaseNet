@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HBaseNet.Const;
 using HBaseNet.Utility;
 using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
@@ -14,10 +15,11 @@ namespace HBaseNet
         private readonly ZkHelper _zkHelper;
         protected TimeSpan BackoffStart { get; set; } = TimeSpan.FromMilliseconds(16);
         protected TimeSpan BackoffIncrease { get; set; } = TimeSpan.FromSeconds(5);
-        protected TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
-        protected int RetryCount { get; set; } = 5;
+        public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
+        public int RetryCount { get; set; } = 5;
         protected CancellationTokenSource DefaultCancellationSource { get; }
-        
+
+        public string ZkRoot { get; set; } = ConstString.DefaultZkRoot;
         protected CommonClient()
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<CommonClient>();

@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using CSharpTest.Net.IO;
 using Google.Protobuf;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Region.Exceptions;
@@ -294,7 +295,7 @@ namespace HBaseNet
         protected async Task<bool> LocateMetaClient(CancellationToken token)
         {
             if (_metaClient != null) return true;
-            var meta = await TryLocateResource(ZkHelper.HBaseMeta, MetaRegionServer.Parser.ParseFrom,
+            var meta = await TryLocateResource(ZkRoot + ConstString.MetaRegion, MetaRegionServer.Parser.ParseFrom,
                 token);
 
             if (meta == null) return false;

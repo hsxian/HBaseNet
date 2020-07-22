@@ -13,10 +13,6 @@ namespace HBaseNet.Zk
     public class ZkHelper
     {
         private ILogger _logger;
-        public const string HBase = "/hbase";
-        public const string HBaseMaster = "/hbase/master";
-        public const string HBaseMeta = "/hbase/meta-region-server";
-
         public ZkHelper()
         {
             _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<ZkHelper>();

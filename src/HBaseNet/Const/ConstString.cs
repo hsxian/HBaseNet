@@ -6,5 +6,8 @@ namespace HBaseNet.Const
         public const string Server = "server";
         public const string FilterPath = "org.apache.hadoop.hbase.filter.";
         public const string ComparatorPath = "org.apache.hadoop.hbase.filter.";
+        public const string DefaultZkRoot = "/hbase";
+        public const string Master = "/master";
+        public const string MetaRegion = "/meta-region-server";
     }
 }

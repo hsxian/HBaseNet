@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Region.Exceptions;
@@ -30,7 +31,7 @@ namespace HBaseNet
         private async Task<bool> LocateMasterClient(CancellationToken token)
         {
             if (_adminClient != null) return true;
-            var master = await TryLocateResource(ZkHelper.HBaseMaster, Master.Parser.ParseFrom,
+            var master = await TryLocateResource(ZkRoot + ConstString.Master, Master.Parser.ParseFrom,
                 token);
 
             _adminClient = await new RegionClient(master.Master_.HostName, (ushort)master.Master_.Port,
@@ -42,7 +43,7 @@ namespace HBaseNet
             return _adminClient != null;
         }
 
-        private async Task<bool> checkProcedureWithBackoff(ulong procId, CancellationToken token)
+        private async Task<bool> CheckProcedureWithBackoff(ulong procId, CancellationToken token)
         {
             var backoff = BackoffStart;
             var oldTime = DateTime.Now;
@@ -84,7 +85,7 @@ namespace HBaseNet
             var res = await _adminClient.GetRPCResult(t.CallId);
             if (res?.Msg is CreateTableResponse create)
             {
-                return await checkProcedureWithBackoff(create.ProcId, token.Value);
+                return await CheckProcedureWithBackoff(create.ProcId, token.Value);
             }
 
             return false;
@@ -97,7 +98,7 @@ namespace HBaseNet
             var res = await _adminClient.GetRPCResult(t.CallId);
             if (res?.Msg is DeleteTableResponse del)
             {
-                return await checkProcedureWithBackoff(del.ProcId, token.Value);
+                return await CheckProcedureWithBackoff(del.ProcId, token.Value);
             }
 
             return false;
@@ -110,7 +111,7 @@ namespace HBaseNet
             var res = await _adminClient.GetRPCResult(t.CallId);
             if (res?.Msg is EnableTableResponse enb)
             {
-                return await checkProcedureWithBackoff(enb.ProcId, token.Value);
+                return await CheckProcedureWithBackoff(enb.ProcId, token.Value);
             }
 
             return false;
@@ -123,7 +124,7 @@ namespace HBaseNet
             var res = await _adminClient.GetRPCResult(t.CallId);
             if (res?.Msg is DisableTableResponse dis)
             {
-                return await checkProcedureWithBackoff(dis.ProcId, token.Value);
+                return await CheckProcedureWithBackoff(dis.ProcId, token.Value);
             }
 
             return false;
