@@ -3,7 +3,7 @@ using org.apache.zookeeper;
 
 namespace HBaseNet.Zk
 {
-    public class ZkLogWatcher:Watcher
+    public class ZkLogWatcher : Watcher
     {
         public override async Task process(WatchedEvent @event)
         {

@@ -30,11 +30,15 @@ namespace HBaseNet
         private async Task<bool> LocateMasterClient(CancellationToken token)
         {
             if (_adminClient != null) return true;
-            var master = await TryLocateResource(ZkRoot + ConstString.Master, Master.Parser.ParseFrom,
-                token);
+            var master = await TryLocateResource(ZkRoot + ConstString.Master, Master.Parser.ParseFrom, token);
 
-            _adminClient = await new RegionClient(master.Master_.HostName, (ushort)master.Master_.Port,
-                    RegionType.MasterService)
+            if (master == null) return false;
+
+            _adminClient = await new RegionClient(master.Master_.HostName, (ushort)master.Master_.Port, RegionType.MasterService)
+            {
+                TimeOut = Timeout,
+                EffectiveUser = EffectiveUser
+            }
                 .Build(RetryCount, token);
             if (_adminClient != null)
                 _logger.LogInformation($"Locate master server at : {_adminClient.Host}:{_adminClient.Port}");

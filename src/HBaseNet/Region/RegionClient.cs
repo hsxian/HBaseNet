@@ -9,6 +9,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BitConverter;
 using Google.Protobuf;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
@@ -24,12 +25,13 @@ namespace HBaseNet.Region
         public ushort Port { get; }
         private RegionType Type { get; }
         private Socket _socket;
-        private int TimeOut { get; }
         private readonly ILogger<RegionClient> _logger;
         private ConcurrentDictionary<uint, RPCResult> _idResultDict;
         private ConcurrentDictionary<uint, RPCSend> _idRPCDict;
         private BlockingCollection<RPCSend> _rpcQueue;
+        public TimeSpan TimeOut { get; set; } = TimeSpan.FromSeconds(30);
         public int CallQueueSize { get; set; } = 150;
+        public string EffectiveUser { get; set; } = ConstString.DefaultEffectiveUser;
         private CancellationTokenSource _defaultCancellationSource;
 
         public RegionClient(string host, ushort port, RegionType type)
@@ -38,7 +40,6 @@ namespace HBaseNet.Region
             Host = host;
             Port = port;
             Type = type;
-            TimeOut = (int)TimeSpan.FromSeconds(30).TotalMilliseconds;
             _rpcQueue = new BlockingCollection<RPCSend>(CallQueueSize);
             _idResultDict = new ConcurrentDictionary<uint, RPCResult>();
             _idRPCDict = new ConcurrentDictionary<uint, RPCSend>();
@@ -160,7 +161,7 @@ namespace HBaseNet.Region
 
                 if (_idRPCDict.TryGetValue(callId, out var rpc))
                 {
-                    if ((DateTime.Now - rpc.QueueTime).TotalMilliseconds > TimeOut)
+                    if ((DateTime.Now - rpc.QueueTime) > TimeOut)
                     {
                         while (_idRPCDict.ContainsKey(callId))
                         {
@@ -190,7 +191,7 @@ namespace HBaseNet.Region
             {
                 UserInfo = new UserInformation
                 {
-                    EffectiveUser = HBaseConfig.Instance.EffectiveUser
+                    EffectiveUser = EffectiveUser
                 },
                 ServiceName = type.ToString()
             };

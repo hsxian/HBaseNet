@@ -1,5 +1,4 @@
 using System;
-using HBaseNet.Const;
 using Microsoft.Extensions.Logging;
 
 namespace HBaseNet
@@ -17,7 +16,5 @@ namespace HBaseNet
             get => _loggerFactory ?? (ILoggerFactory)ServiceProvider?.GetService(typeof(ILoggerFactory));
             set => _loggerFactory = value ?? throw new ArgumentNullException(nameof(LoggerFactory));
         }
-
-        public string EffectiveUser { get; set; } = ConstString.DefaultEffectiveUser;
     }
 }

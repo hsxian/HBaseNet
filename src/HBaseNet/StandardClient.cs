@@ -26,6 +26,7 @@ namespace HBaseNet
         private RegionClient _metaClient;
         private readonly RegionCache _cache;
         private ConcurrentQueue<ICall> _loadRegionQueue;
+        public int CallQueueSize { get; set; } = 150;
         public async Task<IStandardClient> Build(CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
@@ -284,7 +285,12 @@ namespace HBaseNet
 
                 var client = _cache.GetClient(reg.Host, reg.Port)
                              ?? await new RegionClient(reg.Host, reg.Port, RegionType.ClientService)
-                                 .Build(RetryCount, token);
+                             {
+                                 TimeOut = Timeout,
+                                 EffectiveUser = EffectiveUser,
+                                 CallQueueSize = CallQueueSize
+                             }
+                             .Build(RetryCount, token);
                 reg.Client = client;
                 return (client, reg);
             }
@@ -299,9 +305,13 @@ namespace HBaseNet
 
             if (meta == null) return false;
 
-            _metaClient = await new RegionClient(meta.Server.HostName, (ushort)meta.Server.Port,
-                    RegionType.ClientService)
-                .Build(RetryCount, token);
+            _metaClient = await new RegionClient(meta.Server.HostName, (ushort)meta.Server.Port, RegionType.ClientService)
+            {
+                TimeOut = Timeout,
+                EffectiveUser = EffectiveUser,
+                CallQueueSize = CallQueueSize
+            }
+            .Build(RetryCount, token);
             if (_metaClient != null)
             {
                 // _cache.Add(_metaClient);

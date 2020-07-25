@@ -49,7 +49,9 @@ namespace HBaseNet.Console
                 }
             };
             var client = await new StandardClient(ZkQuorum).Build();
+            if (client == null) return;
             var admin = await new AdminClient(ZkQuorum).Build();
+            if (admin == null) return;
             var ado = new AdminClientOperation(admin);
             await ado.ExecAll();
 

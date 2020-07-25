@@ -17,6 +17,7 @@ namespace HBaseNet
         protected TimeSpan BackoffIncrease { get; set; } = TimeSpan.FromSeconds(5);
         public TimeSpan Timeout { get; set; } = TimeSpan.FromSeconds(30);
         public int RetryCount { get; set; } = 5;
+        public string EffectiveUser { get; set; } = ConstString.DefaultEffectiveUser;
         protected CancellationTokenSource DefaultCancellationSource { get; }
 
         public string ZkRoot { get; set; } = ConstString.DefaultZkRoot;
