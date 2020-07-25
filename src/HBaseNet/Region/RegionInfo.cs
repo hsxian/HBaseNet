@@ -14,6 +14,7 @@ namespace HBaseNet.Region
         /// A timestamp when the region is created
         /// </summary>
         public ulong ID { get; set; }
+        public byte[] Namespace { get; set; } = ConstByte.DefaultNamespace;
 
         public byte[] Table { get; set; }
 
@@ -28,9 +29,10 @@ namespace HBaseNet.Region
         public ushort Port { get; set; }
         public RegionClient Client { get; set; }
 
-        public RegionInfo(ulong id, byte[] table, byte[] name, byte[] startKey)
+        public RegionInfo(ulong id, byte[] @namespace, byte[] table, byte[] name, byte[] startKey)
         {
             ID = id;
+            Namespace = @namespace;
             Table = table;
             Name = name;
             StartKey = startKey;
@@ -40,10 +42,10 @@ namespace HBaseNet.Region
         {
             var metaKey = BinaryEx.ConcatInOrder(
                 table,
-                new[] {ConstByte.Comma},
+                new[] { ConstByte.Comma },
                 key,
-                new[] {ConstByte.Comma},
-                new[] {ConstByte.Colon}
+                new[] { ConstByte.Comma },
+                new[] { ConstByte.Colon }
             );
             return metaKey;
         }
@@ -117,15 +119,15 @@ namespace HBaseNet.Region
 
         public bool IsRegionOverlap(RegionInfo other)
         {
-            return BinaryComparer.Equals(Table, other.Table)
-                   && (other.StopKey?.Any() != true || BinaryComparer.Compare(StartKey, other.StopKey) < 0)
-                   && (StopKey?.Any() != true || BinaryComparer.Compare(StopKey, other.StartKey) > 0);
+            return BinaryComparer.Equals(Namespace, other.Namespace)
+                    && BinaryComparer.Equals(Table, other.Table)
+                    && (other.StopKey?.Any() != true || BinaryComparer.Compare(StartKey, other.StopKey) < 0)
+                    && (StopKey?.Any() != true || BinaryComparer.Compare(StopKey, other.StartKey) > 0);
         }
 
         public override string ToString()
         {
-            return
-                $"RegionInfo->Name: {Name.ToUtf8String()}, ID: {ID}, Table: {Table.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
+            return $"RegionInfo->Name: {Name.ToUtf8String()}, ID: {ID}, Namespace: {Namespace.ToUtf8String()}, Table: {Table.ToUtf8String()}, StartKey:{StartKey.ToUtf8String()}, StopKey: {StopKey.ToUtf8String()}";
         }
 
         public static RegionInfo ParseFromCell(Cell cell)
@@ -138,7 +140,12 @@ namespace HBaseNet.Region
             if (magic != ConstInt.PBufMagic) return result;
             var reg = v[4..^4].TryParseTo(Pb.RegionInfo.Parser.ParseFrom);
             if (reg == null) return result;
-            result = new RegionInfo(reg.RegionId, reg.TableName.Qualifier.ToArray(), cell.Row.ToArray(),
+            var @namespace = reg.TableName.Namespace.ToArray();
+            if (BinaryComparer.Compare(@namespace, ConstByte.DefaultNamespace) == 0)
+            {
+                @namespace = ConstByte.DefaultNamespace;
+            }
+            result = new RegionInfo(reg.RegionId, @namespace, reg.TableName.Qualifier.ToArray(), cell.Row.ToArray(),
                 reg.StartKey.ToArray())
             {
                 StopKey = reg.EndKey.ToArray()

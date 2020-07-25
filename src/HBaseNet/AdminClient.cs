@@ -6,7 +6,6 @@ using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
-using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
 using Pb;
 

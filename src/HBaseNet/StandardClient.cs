@@ -12,7 +12,6 @@ using HBaseNet.HRpc;
 using HBaseNet.Region;
 using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
-using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
 using Pb;
 using RegionInfo = HBaseNet.Region.RegionInfo;
@@ -42,7 +41,7 @@ namespace HBaseNet
                 {"info", null}
             };
             _metaTableName = "hbase:meta".ToUtf8Bytes();
-            _metaRegionInfo = new RegionInfo(0, "hbase:meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), null);
+            _metaRegionInfo = new RegionInfo(0, "hbase".ToUtf8Bytes(), "meta".ToUtf8Bytes(), "hbase:meta,,1".ToUtf8Bytes(), null);
             _cache = new RegionCache();
             _loadRegionQueue = new ConcurrentQueue<ICall>();
             ProcessResolveRegionTask();
@@ -270,7 +269,7 @@ namespace HBaseNet
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(ICall rpc, CancellationToken token)
         {
             var backoff = BackoffStart;
-            var searchKey = RegionInfo.CreateRegionSearchKey(rpc.Table, rpc.Key);
+            var searchKey = RegionInfo.CreateRegionSearchKey(FullyQualifiedTable(rpc), rpc.Key);
             while (rpc.FindRegionRetryCount < RetryCount && token.IsCancellationRequested == false)
             {
                 rpc.FindRegionRetryCount++;
@@ -338,8 +337,13 @@ namespace HBaseNet
                         $"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
                 }
             }
-
             return result;
+        }
+
+        private byte[] FullyQualifiedTable(ICall rpc)
+        {
+            if (rpc.Namespace?.Any() != true) return rpc.Table;
+            return BinaryEx.ConcatInOrder(rpc.Namespace, new[] { ConstByte.Colon }, rpc.Table);
         }
 
         public void Dispose()
