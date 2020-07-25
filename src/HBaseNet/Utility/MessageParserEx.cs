@@ -1,5 +1,6 @@
 using System;
 using Google.Protobuf;
+using HBaseNet.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace HBaseNet.Utility
@@ -10,7 +11,7 @@ namespace HBaseNet.Utility
 
         static MessageParserEx()
         {
-            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger(nameof(MessageParserEx));
+            _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger(nameof(MessageParserEx)) ?? new DebugLogger<IMessage>();
         }
 
         public static T TryParseTo<T>(this byte[] arr, Func<byte[], T> parser) where T : IMessage<T>

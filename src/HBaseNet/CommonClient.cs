@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.Const;
+using HBaseNet.Logging;
 using HBaseNet.Utility;
 using HBaseNet.Zk;
 using Microsoft.Extensions.Logging;
@@ -23,7 +24,7 @@ namespace HBaseNet
         public string ZkRoot { get; set; } = ConstString.DefaultZkRoot;
         protected CommonClient()
         {
-            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<CommonClient>();
+            _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<CommonClient>() ?? new DebugLogger<CommonClient>();
             _zkHelper = new ZkHelper();
             DefaultCancellationSource = new CancellationTokenSource();
         }

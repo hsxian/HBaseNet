@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Google.Protobuf;
 using HBaseNet.Const;
+using HBaseNet.Logging;
 using HBaseNet.Utility;
 using Microsoft.Extensions.Logging;
 using org.apache.zookeeper;
@@ -15,7 +16,7 @@ namespace HBaseNet.Zk
         private ILogger _logger;
         public ZkHelper()
         {
-            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<ZkHelper>();
+            _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<ZkHelper>() ?? new DebugLogger<ZkHelper>();
         }
 
         public async Task<TResult> LocateResource<TResult>(ZooKeeper zk, string resource,

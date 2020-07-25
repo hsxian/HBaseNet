@@ -1,4 +1,5 @@
 using System;
+using HBaseNet.Logging;
 using Microsoft.Extensions.Logging;
 
 namespace HBaseNet

@@ -11,6 +11,7 @@ using BitConverter;
 using Google.Protobuf;
 using HBaseNet.Const;
 using HBaseNet.HRpc;
+using HBaseNet.Logging;
 using HBaseNet.Region.Exceptions;
 using HBaseNet.Utility;
 using Microsoft.Extensions.Logging;
@@ -36,7 +37,7 @@ namespace HBaseNet.Region
 
         public RegionClient(string host, ushort port, RegionType type)
         {
-            _logger = HBaseConfig.Instance.LoggerFactory.CreateLogger<RegionClient>();
+            _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<RegionClient>() ?? new DebugLogger<RegionClient>();
             Host = host;
             Port = port;
             Type = type;
