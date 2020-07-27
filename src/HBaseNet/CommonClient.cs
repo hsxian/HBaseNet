@@ -29,8 +29,7 @@ namespace HBaseNet
             DefaultCancellationSource = new CancellationTokenSource();
         }
 
-        protected async Task<TResult> TryLocateResource<TResult>(string resource,
-            Func<byte[], TResult> getResultFunc, CancellationToken token)
+        protected async Task<TResult> TryLocateResource<TResult>(string resource, Func<byte[], TResult> getResultFunc, CancellationToken token)
         {
             var zkc = _zkHelper.CreateClient(ZkQuorum, Timeout);
             var backoff = BackoffStart;
@@ -40,8 +39,7 @@ namespace HBaseNet
                 result = await _zkHelper.LocateResource(zkc, resource, getResultFunc);
                 if (result == null)
                 {
-                    _logger.LogWarning(
-                        $"Locate {resource} failed in {i + 1}th，try the locate again after {backoff}.");
+                    _logger.LogWarning($"Locate {resource} failed in {i + 1}th，try the locate again after {backoff}.");
                     backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                 }
                 else

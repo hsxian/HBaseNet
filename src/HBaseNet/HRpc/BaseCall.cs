@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using Google.Protobuf;
@@ -12,7 +11,6 @@ namespace HBaseNet.HRpc
         public uint CallId { get; set; }
         public uint RetryCount { get; set; }
         public uint FindRegionRetryCount { get; set; }
-        public byte[] Namespace { get; set; }
         public byte[] Table { get; set; }
         public byte[] Key { get; set; }
         public abstract string Name { get; }

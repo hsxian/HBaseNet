@@ -50,7 +50,6 @@ namespace HBaseNet
 
         public async Task<bool> CheckTable(string table, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             var get = new GetCall(table, "theKey");
             return null != await SendRPCToRegion<GetResponse>(get, token);
         }
@@ -58,7 +57,6 @@ namespace HBaseNet
         public async Task<bool> CheckAndPut(MutateCall put, string family, string qualifier,
             byte[] expectedValue, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             var cas = new CheckAndPutCall(put, family, qualifier, expectedValue);
             var res = await SendRPCToRegion<MutateResponse>(cas, token);
             return res != null && res.Processed;
@@ -66,7 +64,6 @@ namespace HBaseNet
 
         public async Task<List<Result>> Scan(ScanCall scan, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             var results = new List<Result>();
             ScanResponse scanres;
             ScanCall rpc = null;
@@ -117,40 +114,35 @@ namespace HBaseNet
 
         public async Task<GetResponse> Get(GetCall get, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
-            var res = await SendRPCToRegion<GetResponse>(get, token.Value);
+            var res = await SendRPCToRegion<GetResponse>(get, token);
             return res;
         }
 
         public async Task<MutateResponse> Put(MutateCall put, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             put.MutationType = MutationProto.Types.MutationType.Put;
-            var res = await SendRPCToRegion<MutateResponse>(put, token.Value);
+            var res = await SendRPCToRegion<MutateResponse>(put, token);
             return res;
         }
 
         public async Task<MutateResponse> Delete(MutateCall del, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             del.MutationType = MutationProto.Types.MutationType.Delete;
-            var res = await SendRPCToRegion<MutateResponse>(del, token.Value);
+            var res = await SendRPCToRegion<MutateResponse>(del, token);
             return res;
         }
 
         public async Task<MutateResponse> Append(MutateCall apd, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             apd.MutationType = MutationProto.Types.MutationType.Append;
-            var res = await SendRPCToRegion<MutateResponse>(apd, token.Value);
+            var res = await SendRPCToRegion<MutateResponse>(apd, token);
             return res;
         }
 
         public async Task<long?> Increment(MutateCall inc, CancellationToken? token = null)
         {
-            token ??= DefaultCancellationSource.Token;
             inc.MutationType = MutationProto.Types.MutationType.Increment;
-            var res = await SendRPCToRegion<MutateResponse>(inc, token.Value);
+            var res = await SendRPCToRegion<MutateResponse>(inc, token);
             if (res?.Result?.Cell?.Count == 1)
             {
                 return (long)BinaryPrimitives.ReadUInt64BigEndian(res?.Result?.Cell[0].Value.ToByteArray());
@@ -171,6 +163,7 @@ namespace HBaseNet
             await client.QueueRPC(rpc);
             return client;
         }
+
         private void ProcessResolveRegionTask()
         {
             Task.Factory.StartNew(async () =>
@@ -270,15 +263,14 @@ namespace HBaseNet
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(ICall rpc, CancellationToken token)
         {
             var backoff = BackoffStart;
-            var searchKey = RegionInfo.CreateRegionSearchKey(FullyQualifiedTable(rpc), rpc.Key);
+            var searchKey = RegionInfo.CreateRegionSearchKey(rpc.Table, rpc.Key);
             while (rpc.FindRegionRetryCount < RetryCount && token.IsCancellationRequested == false)
             {
                 rpc.FindRegionRetryCount++;
                 var reg = await FindRegionInfoForRPC(searchKey, token);
                 if (reg == null)
                 {
-                    _logger.LogWarning(
-                        $"Locate region failed in {rpc.FindRegionRetryCount}th，try the locate again after {backoff}.");
+                    _logger.LogWarning($"Locate region failed in {rpc.FindRegionRetryCount}th，try the locate again after {backoff}.");
                     backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                     continue;
                 }
@@ -300,8 +292,7 @@ namespace HBaseNet
         protected async Task<bool> LocateMetaClient(CancellationToken token)
         {
             if (_metaClient != null) return true;
-            var meta = await TryLocateResource(ZkRoot + ConstString.MetaRegion, MetaRegionServer.Parser.ParseFrom,
-                token);
+            var meta = await TryLocateResource(ZkRoot + ConstString.MetaRegion, MetaRegionServer.Parser.ParseFrom, token);
 
             if (meta == null) return false;
 
@@ -314,7 +305,6 @@ namespace HBaseNet
             .Build(RetryCount, token);
             if (_metaClient != null)
             {
-                // _cache.Add(_metaClient);
                 _logger.LogInformation($"Locate meta server at : {_metaClient.Host}:{_metaClient.Port}");
             }
             return _metaClient != null;
@@ -325,13 +315,12 @@ namespace HBaseNet
             if (BinaryComparer.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
-            if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
+            if (info == null || false == BinaryComparer.Equals(table, (info.Table))) return null;
             if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
             return info;
         }
 
-        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey,
-            CancellationToken token)
+        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey, CancellationToken token)
         {
             var result = default(RegionInfo);
             var getCall = new GetCall(_metaTableName, searchKey, true) { Families = _infoFamily, Info = _metaRegionInfo };
@@ -343,17 +332,16 @@ namespace HBaseNet
                 result = RegionInfo.ParseFromGetResponse(response);
                 if (result != null)
                 {
-                    _logger.LogInformation(
-                        $"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
+                    _logger.LogInformation($"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
                 }
             }
             return result;
         }
 
-        private byte[] FullyQualifiedTable(ICall rpc)
+        private byte[] FullyQualifiedTable(RegionInfo reg)
         {
-            if (rpc.Namespace?.Any() != true) return rpc.Table;
-            return BinaryEx.ConcatInOrder(rpc.Namespace, new[] { ConstByte.Colon }, rpc.Table);
+            if (reg.Namespace?.Any() != true) return reg.Table;
+            return BinaryEx.ConcatInOrder(reg.Namespace, new[] { ConstByte.Colon }, reg.Table);
         }
 
         public void Dispose()

@@ -2,10 +2,8 @@ using System;
 using System.Buffers.Binary;
 using System.Linq;
 using System.Threading.Tasks;
-using Google.Protobuf;
 using HBaseNet.Const;
 using HBaseNet.Logging;
-using HBaseNet.Utility;
 using Microsoft.Extensions.Logging;
 using org.apache.zookeeper;
 
