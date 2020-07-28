@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using Google.Protobuf;
 using HBaseNet.HRpc;
 using Pb;
 
@@ -16,8 +17,7 @@ namespace HBaseNet
         Task<MutateResponse> Delete(MutateCall del, CancellationToken? token = null);
         Task<MutateResponse> Append(MutateCall apd, CancellationToken? token = null);
         Task<long?> Increment(MutateCall inc, CancellationToken? token = null);
-
-        Task<bool> CheckAndPut(MutateCall put, string family, string qualifier, byte[] expectedValue,
-            CancellationToken? token = null);
+        Task<bool> CheckAndPut(MutateCall put, string family, string qualifier, byte[] expectedValue, CancellationToken? token = null);
+        Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token) where TResponse : class, IMessage;
     }
 }

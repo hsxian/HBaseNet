@@ -208,8 +208,7 @@ namespace HBaseNet
             return (client, reg);
         }
 
-        protected async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token)
-            where TResponse : class, IMessage
+        public async Task<TResponse> SendRPCToRegion<TResponse>(ICall rpc, CancellationToken? token) where TResponse : class, IMessage
         {
             token ??= DefaultCancellationSource.Token;
             while (token.Value.IsCancellationRequested == false)
@@ -235,8 +234,7 @@ namespace HBaseNet
 
                 if (result.Msg != null)
                 {
-                    _logger.LogWarning(
-                        $"Generic result parameter types do not match, HBase return type is {result.Msg.Descriptor.FullName}, but here is given {typeof(TResponse).FullName}");
+                    _logger.LogWarning($"Generic result parameter types do not match, HBase return type is {result.Msg.Descriptor.FullName}, but here is given {typeof(TResponse).FullName}");
                 }
 
                 switch (result.Error)
@@ -315,7 +313,7 @@ namespace HBaseNet
             if (BinaryComparer.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
-            if (info == null || false == BinaryComparer.Equals(table, (info.Table))) return null;
+            if (info == null || false == BinaryComparer.Equals(table, info)) return null;
             if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
             return info;
         }
