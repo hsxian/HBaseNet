@@ -11,12 +11,14 @@ namespace HBaseNet.HRpc
         public IDictionary<string, string[]> Families { get; set; }
         public byte[] StartRow { get; set; }
         public byte[] StopRow { get; set; }
-        private bool CloseScanner { get; }
-        private ulong? ScannerID { get; }
+        public bool CloseScanner { get; }
+        public ulong? ScannerID { get; set; }
         public Filter.IFilter Filters { get; set; }
         public TimeRange TimeRange { get; set; }
         public uint MaxVersions { get; set; } = 1;
         public uint NumberOfRows { get; set; } = 128;
+        public bool AllowPartialResults { get; set; }
+        public bool Reversed { get; set; }
 
         public ScanCall(string table, byte[] startRow, byte[] stopRow) : this(table.ToUtf8Bytes(), startRow, stopRow)
         {
@@ -52,8 +54,8 @@ namespace HBaseNet.HRpc
             {
                 scan.Scan = new Scan
                 {
-                    StartRow = ByteString.CopyFrom(StartRow),
-                    StopRow = ByteString.CopyFrom(StopRow),
+                    StartRow = ByteString.CopyFrom(StartRow ?? new byte[0]),
+                    StopRow = ByteString.CopyFrom(StopRow ?? new byte[0]),
                     Filter = Filters?.ConvertToPBFilter(),
                     MaxVersions = MaxVersions,
                     TimeRange = TimeRange

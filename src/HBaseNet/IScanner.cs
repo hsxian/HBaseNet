@@ -8,5 +8,6 @@ namespace HBaseNet
     public interface IScanner : IDisposable
     {
         Task<List<Result>> Next();
+        Task Close();
     }
 }

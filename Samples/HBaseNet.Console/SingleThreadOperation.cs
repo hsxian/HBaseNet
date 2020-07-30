@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using BitConverter;
 using HBaseNet.HRpc;
 using HBaseNet.Utility;
+using Pb;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -38,7 +39,7 @@ namespace HBaseNet.Console
 
         public async Task ExecScan()
         {
-            var sc = new ScanCall(Program.Table, "0".ToUtf8Bytes(), "".ToUtf8Bytes())
+            var sc = new ScanCall(Program.Table, "".ToUtf8Bytes(), "".ToUtf8Bytes())
             {
                 // Families = Program.Family,
                 // TimeRange = new TimeRange
@@ -46,16 +47,24 @@ namespace HBaseNet.Console
                 //     From = new DateTime(2018, 1, 1).ToUnixU13(),
                 //     To = new DateTime(2019, 1, 2).ToUnixU13()
                 // },
-                NumberOfRows = 10000000
+                NumberOfRows = 100000
             };
-            var scanResults = await _client.Scan(sc);
+            using var scanner = _client.Scan(sc);
+            var scanResults = new List<Result>();
+            do
+            {
+                var per = await scanner.Next();
+                if (true != per?.Any()) break;
+                scanResults.AddRange(per);
+            } while (scanResults.Count < 10000000);
             Log.Information($"scan result count:{scanResults.Count}");
         }
 
         public async Task ExecScanAndDelete()
         {
-            var scanResults =
-                await _client.Scan(new ScanCall(Program.Table, "0".ToUtf8Bytes(), "1".ToUtf8Bytes()) { NumberOfRows = 1 });
+            using var scanner = _client.Scan(new ScanCall(Program.Table, "0".ToUtf8Bytes(), "1".ToUtf8Bytes())
+            { NumberOfRows = 3 });
+            var scanResults = await scanner.Next();
             Log.Information($"scan result count:{scanResults.Count}");
             foreach (var result in scanResults)
             {

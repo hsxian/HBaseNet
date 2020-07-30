@@ -11,7 +11,7 @@ namespace HBaseNet
     public interface IStandardClient : IDisposable
     {
         Task<bool> CheckTable(string table, CancellationToken? token = null);
-        Task<List<Result>> Scan(ScanCall scan, CancellationToken? token = null);
+        IScanner Scan(ScanCall scan, CancellationToken? token = null);
         Task<GetResponse> Get(GetCall get, CancellationToken? token = null);
         Task<MutateResponse> Put(MutateCall put, CancellationToken? token = null);
         Task<MutateResponse> Delete(MutateCall del, CancellationToken? token = null);

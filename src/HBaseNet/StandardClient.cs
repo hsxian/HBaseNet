@@ -62,54 +62,9 @@ namespace HBaseNet
             return res != null && res.Processed;
         }
 
-        public async Task<List<Result>> Scan(ScanCall scan, CancellationToken? token = null)
+        public IScanner Scan(ScanCall scan, CancellationToken? token = null)
         {
-            var results = new List<Result>();
-            ScanResponse scanres;
-            ScanCall rpc = null;
-            var table = scan.Table;
-            var startRow = scan.StartRow;
-            var stopRow = scan.StopRow;
-            var families = scan.Families;
-            var filters = scan.Filters;
-            var timeRange = scan.TimeRange;
-            var maxVersion = scan.MaxVersions;
-            var numberOfRows = scan.NumberOfRows;
-            while (true)
-            {
-                var regionRowLimit = numberOfRows - results.Count;
-                rpc = new ScanCall(table, rpc == null ? startRow : rpc.Info.StopKey, stopRow)
-                {
-                    Families = families,
-                    Filters = filters,
-                    TimeRange = timeRange,
-                    MaxVersions = maxVersion,
-                    NumberOfRows = (uint)regionRowLimit,
-                };
-                scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
-                if (scanres == null) break;
-                results.AddRange(scanres.Results);
-                while (scanres.Results?.Any() == true && results.Count < numberOfRows)
-                {
-                    rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, false);
-                    scanres = await SendRPCToRegion<ScanResponse>(rpc, token);
-                    if (scanres.Results?.Any() != true) break;
-                    results.AddRange(scanres.Results);
-                }
-
-                rpc = new ScanCall(table, scanres.ScannerId, rpc.Key, true);
-                await SendRPCToRegion<ScanResponse>(rpc, token);
-
-                if (results.Count >= numberOfRows
-                    || rpc.Info?.StopKey?.Any() != true
-                    || (stopRow.Length != 0 && BinaryComparer.Compare(stopRow, rpc.Info.StopKey) <= 0)
-                )
-                {
-                    break;
-                }
-            }
-
-            return results;
+            return new Scanner(this, scan);
         }
 
         public async Task<GetResponse> Get(GetCall get, CancellationToken? token = null)
@@ -313,7 +268,7 @@ namespace HBaseNet
             if (BinaryComparer.Compare(table, _metaTableName) == 0) return _metaRegionInfo;
             var search = RegionInfo.CreateRegionSearchKey(table, key);
             var info = _cache.GetInfo(search);
-            if (info == null || false == BinaryComparer.Equals(table, info)) return null;
+            if (info == null || false == BinaryComparer.Equals(table, info.Table)) return null;
             if (info.StopKey.Length > 0 && BinaryComparer.Compare(key, info.StopKey) >= 0) return null;
             return info;
         }
