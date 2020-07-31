@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using HBaseNet.Const;
@@ -80,12 +81,16 @@ namespace HBaseNet
 
             return false;
         }
-
+        private async Task<RPCResult> SendRPC(ICall t, CancellationToken? token = null)
+        {
+            await _adminClient.QueueRPC(t);
+            var res = await _adminClient.GetRPCResult(t.CallId);
+            return res;
+        }
         public async Task<bool> CreateTable(CreateTableCall t, CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
-            await _adminClient.QueueRPC(t);
-            var res = await _adminClient.GetRPCResult(t.CallId);
+            var res = await SendRPC(t, token);
             if (res?.Msg is CreateTableResponse create)
             {
                 return await CheckProcedureWithBackoff(create.ProcId, token.Value);
@@ -97,8 +102,7 @@ namespace HBaseNet
         public async Task<bool> DeleteTable(DeleteTableCall t, CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
-            await _adminClient.QueueRPC(t);
-            var res = await _adminClient.GetRPCResult(t.CallId);
+            var res = await SendRPC(t, token);
             if (res?.Msg is DeleteTableResponse del)
             {
                 return await CheckProcedureWithBackoff(del.ProcId, token.Value);
@@ -110,8 +114,7 @@ namespace HBaseNet
         public async Task<bool> EnableTable(EnableTableCall t, CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
-            await _adminClient.QueueRPC(t);
-            var res = await _adminClient.GetRPCResult(t.CallId);
+            var res = await SendRPC(t, token);
             if (res?.Msg is EnableTableResponse enb)
             {
                 return await CheckProcedureWithBackoff(enb.ProcId, token.Value);
@@ -123,14 +126,23 @@ namespace HBaseNet
         public async Task<bool> DisableTable(DisableTableCall t, CancellationToken? token = null)
         {
             token ??= DefaultCancellationSource.Token;
-            await _adminClient.QueueRPC(t);
-            var res = await _adminClient.GetRPCResult(t.CallId);
+            var res = await SendRPC(t, token);
             if (res?.Msg is DisableTableResponse dis)
             {
                 return await CheckProcedureWithBackoff(dis.ProcId, token.Value);
             }
 
             return false;
+        }
+
+        public async Task<TableName[]> ListTableNames(ListTableNamesCall t, CancellationToken? token = null)
+        {
+            var res = await SendRPC(t, token);
+            if (res?.Msg is GetTableNamesResponse resp)
+            {
+                return resp.TableNames.ToArray();
+            }
+            return null;
         }
 
         public void Dispose()
