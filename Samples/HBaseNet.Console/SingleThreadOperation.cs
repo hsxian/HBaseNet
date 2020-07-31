@@ -21,13 +21,6 @@ namespace HBaseNet.Console
             _client = client;
         }
 
-        public async Task<bool> CheckTable()
-        {
-            var result = await _client.CheckTable(Program.Table);
-            Log.Logger.Information($"check table '{Program.Table}': {result}");
-            return result;
-        }
-
         public async Task ExecPut(int count)
         {
             for (var i = 0; i < count; i++)
@@ -39,7 +32,7 @@ namespace HBaseNet.Console
 
         public async Task ExecScan()
         {
-            var sc = new ScanCall(Program.Table, "".ToUtf8Bytes(), "".ToUtf8Bytes())
+            var sc = new ScanCall(Program.Table, "1".ToUtf8Bytes(), "".ToUtf8Bytes())
             {
                 // Families = Program.Family,
                 // TimeRange = new TimeRange

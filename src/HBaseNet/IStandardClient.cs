@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Google.Protobuf;
@@ -10,7 +9,6 @@ namespace HBaseNet
 {
     public interface IStandardClient : IDisposable
     {
-        Task<bool> CheckTable(string table, CancellationToken? token = null);
         IScanner Scan(ScanCall scan, CancellationToken? token = null);
         Task<GetResponse> Get(GetCall get, CancellationToken? token = null);
         Task<MutateResponse> Put(MutateCall put, CancellationToken? token = null);

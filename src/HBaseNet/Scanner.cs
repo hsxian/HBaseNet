@@ -23,7 +23,7 @@ namespace HBaseNet
         private bool _closed;
         private readonly IStandardClient _client;
         protected readonly ILogger<Scanner> _logger;
-        private byte[] _rowPadding = new byte[] { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
+        private static byte[] _rowPadding = new byte[] { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
         private bool _isLastRegionEnd;
         public Scanner(IStandardClient client, ScanCall rpc)
         {
@@ -91,18 +91,25 @@ namespace HBaseNet
                     _startRow = region.StartKey;
                     return;
                 }
-
-                var rsk = region.StartKey;
-                if (rsk.Last() == 0)
-                {
-                    _startRow = rsk[..(rsk.Length - 1)];
-                    return;
-                }
-
-                var tmp = BinaryEx.ConcatInOrder(rsk, _rowPadding);
-                tmp[rsk.Length - 1]--;
-                _startRow = tmp;
+                _startRow = GetReversedStartKey(region.StartKey);
             }
+        }
+        public static byte[] GetReversedStartKey(byte[] startKey)
+        {
+            if (true != startKey?.Any())
+            {
+                return null;
+            }
+            var rsk = new byte[startKey.Length];
+            Array.Copy(startKey, rsk, startKey.Length);
+            if (rsk.Last() == 0)
+            {
+                return rsk[..(rsk.Length - 1)];
+            }
+
+            var tmp = BinaryEx.ConcatInOrder(rsk, _rowPadding);
+            tmp[rsk.Length - 1]--;
+            return tmp;
         }
         private async Task<List<Result>> Fetch()
         {

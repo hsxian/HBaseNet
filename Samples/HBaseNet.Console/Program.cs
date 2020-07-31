@@ -59,16 +59,11 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
 
-            if (await sto.CheckTable() == false)
+            var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
             {
-                var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
-                {
-                    SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}").ToArray()
-                };
-                await admin.CreateTable(create);
-            }
-
-            if (await sto.CheckTable() == false) return;
+                SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}").ToArray()
+            };
+            // await admin.CreateTable(create);
 
             await sto.ExecCheckAndPut();
 

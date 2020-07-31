@@ -48,12 +48,6 @@ namespace HBaseNet
             ProcessResolveRegionTask();
         }
 
-        public async Task<bool> CheckTable(string table, CancellationToken? token = null)
-        {
-            var get = new GetCall(table, "theKey");
-            return null != await SendRPCToRegion<GetResponse>(get, token);
-        }
-
         public async Task<bool> CheckAndPut(MutateCall put, string family, string qualifier,
             byte[] expectedValue, CancellationToken? token = null)
         {
@@ -177,7 +171,7 @@ namespace HBaseNet
                 var client = await QueueRPC(rpc, token.Value);
                 if (client == null)
                 {
-                    _logger.LogWarning("queue rpc return none client.");
+                    _logger.LogError("queue rpc return none client.");
                     return null;
                 }
 
@@ -216,11 +210,10 @@ namespace HBaseNet
         private async Task<(RegionClient client, RegionInfo info)> TryLocateRegion(ICall rpc, CancellationToken token)
         {
             var backoff = BackoffStart;
-            var searchKey = RegionInfo.CreateRegionSearchKey(rpc.Table, rpc.Key);
             while (rpc.FindRegionRetryCount < RetryCount && token.IsCancellationRequested == false)
             {
                 rpc.FindRegionRetryCount++;
-                var reg = await FindRegionInfoForRPC(searchKey, token);
+                var reg = await FindRegionInfoForRPC(rpc.Table, rpc.Key, token);
                 if (reg == null)
                 {
                     _logger.LogWarning($"Locate region failed in {rpc.FindRegionRetryCount}th，try the locate again after {backoff}.");
@@ -273,20 +266,29 @@ namespace HBaseNet
             return info;
         }
 
-        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] searchKey, CancellationToken token)
+        private async Task<RegionInfo> FindRegionInfoForRPC(byte[] table, byte[] key, CancellationToken token)
         {
             var result = default(RegionInfo);
-            var getCall = new GetCall(_metaTableName, searchKey, true) { Families = _infoFamily, Info = _metaRegionInfo };
-            await _metaClient.QueueRPC(getCall);
-            var resp = await _metaClient.GetRPCResult(getCall.CallId);
-
-            if (resp?.Msg is GetResponse response)
+            var searchKey = RegionInfo.CreateRegionSearchKey(table, key);
+            var rpc = new ScanCall(_metaTableName, searchKey, table)
             {
-                result = RegionInfo.ParseFromGetResponse(response);
-                if (result != null)
-                {
-                    _logger.LogInformation($"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
-                }
+                Families = _infoFamily,
+                CloseScanner = true,
+                Reversed = true,
+                NumberOfRows = 1,
+                Info = _metaRegionInfo
+            };
+
+            await _metaClient.QueueRPC(rpc);
+            var res = await _metaClient.GetRPCResult(rpc.CallId);
+            if (res?.Msg is ScanResponse scanResponse)
+            {
+                result = RegionInfo.ParseFromScanResponse(scanResponse);
+            }
+
+            if (result != null)
+            {
+                _logger.LogInformation($"Find region info :{result.Name.ToUtf8String()}, at {result.Host}:{result.Port}");
             }
             return result;
         }

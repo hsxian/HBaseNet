@@ -153,18 +153,16 @@ namespace HBaseNet.Region
             return result;
         }
 
-        public static RegionInfo ParseFromGetResponse(GetResponse metaRow)
+        public static RegionInfo ParseFromScanResponse(ScanResponse resp)
         {
-            if (metaRow?.Result == null) return null;
+            if (true != resp?.Results?.Any()) return null;
 
-            var regCell = metaRow.Result.Cell
-                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));
+            var regCell = resp.Results.First().Cell.FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.RegionInfo));
 
             var reg = RegionInfo.ParseFromCell(regCell);
             if (reg == null) return null;
 
-            var server = metaRow.Result.Cell
-                .FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.Server) && t.HasValue);
+            var server = resp.Results.First().Cell.FirstOrDefault(t => t.Qualifier.ToStringUtf8().Equals(ConstString.Server) && t.HasValue);
             if (server == null) return null;
             var serverData = server.Value.ToArray();
 
