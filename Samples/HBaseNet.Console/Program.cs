@@ -64,7 +64,7 @@ namespace HBaseNet.Console
                 SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}").ToArray()
             };
 
-            var tables = await ado._admin.ListTableNames(new ListTableNamesCall { Regex = Table });
+            var tables = await admin.ListTableNames(new ListTableNamesCall { Regex = Table });
             if (true != tables?.Any())
             {
                 await admin.CreateTable(create);

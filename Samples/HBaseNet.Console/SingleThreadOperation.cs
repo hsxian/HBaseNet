@@ -55,9 +55,9 @@ namespace HBaseNet.Console
 
         public async Task ExecScanAndDelete()
         {
-            using var scanner = _client.Scan(new ScanCall(Program.Table, "0".ToUtf8Bytes(), "1".ToUtf8Bytes())
-            { NumberOfRows = 3 });
+            using var scanner = _client.Scan(new ScanCall(Program.Table, "1".ToUtf8Bytes(), "".ToUtf8Bytes()) { NumberOfRows = 3 });
             var scanResults = await scanner.Next();
+            if (null == scanResults) return;
             Log.Information($"scan result count:{scanResults.Count}");
             foreach (var result in scanResults)
             {

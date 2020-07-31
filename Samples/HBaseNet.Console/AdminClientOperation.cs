@@ -35,13 +35,14 @@ namespace HBaseNet.Console
             };
             var create = new CreateTableCall(table, cols)
             {
-                SplitKeys = new[] {"0", "5"}
+                SplitKeys = new[] { "0", "5" }
             };
+            var disable = new DisableTableCall(table);
             var delete = new DeleteTableCall(table);
 
             var ct = await _admin.CreateTable(create);
             Log.Logger.Information($"Create table: {table.ToUtf8String()},result:{ct}");
-            var dt = await _admin.DisableTable(new DisableTableCall(table));
+            var dt = await _admin.DisableTable(disable);
             Log.Logger.Information($"Disable table: {table.ToUtf8String()},result:{dt}");
             var del = await _admin.DeleteTable(delete);
             Log.Logger.Information($"Delete table: {table.ToUtf8String()},result:{del}");
