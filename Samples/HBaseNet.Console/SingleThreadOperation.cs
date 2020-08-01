@@ -32,7 +32,7 @@ namespace HBaseNet.Console
 
         public async Task ExecScan()
         {
-            var sc = new ScanCall(Program.Table, "1".ToUtf8Bytes(), "".ToUtf8Bytes())
+            var sc = new ScanCall(Program.Table, "".ToUtf8Bytes(), "g".ToUtf8Bytes())
             {
                 // Families = Program.Family,
                 // TimeRange = new TimeRange
@@ -40,22 +40,22 @@ namespace HBaseNet.Console
                 //     From = new DateTime(2018, 1, 1).ToUnixU13(),
                 //     To = new DateTime(2019, 1, 2).ToUnixU13()
                 // },
-                NumberOfRows = 100000
+                NumberOfRows = 100000,
             };
             using var scanner = _client.Scan(sc);
             var scanResults = new List<Result>();
-            do
+            while (scanner.CanContinueNext)
             {
                 var per = await scanner.Next();
-                if (true != per?.Any()) break;
+                if (true != per?.Any()) continue;
                 scanResults.AddRange(per);
-            } while (scanResults.Count < 10000000);
+            }
             Log.Information($"scan result count:{scanResults.Count}");
         }
 
         public async Task ExecScanAndDelete()
         {
-            using var scanner = _client.Scan(new ScanCall(Program.Table, "1".ToUtf8Bytes(), "".ToUtf8Bytes()) { NumberOfRows = 3 });
+            using var scanner = _client.Scan(new ScanCall(Program.Table, "".ToUtf8Bytes(), "g".ToUtf8Bytes()) { NumberOfRows = 3 });
             var scanResults = await scanner.Next();
             if (null == scanResults) return;
             Log.Information($"scan result count:{scanResults.Count}");

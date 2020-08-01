@@ -19,12 +19,12 @@ namespace HBaseNet
         private ulong? _scannerID;
         private byte[] _startRow;
         public CancellationToken CancellationToken { get; set; }
+        public bool CanContinueNext { get; private set; } = true;
         private List<Result> _results;
         private bool _closed;
         private readonly IStandardClient _client;
         protected readonly ILogger<Scanner> _logger;
         private static byte[] _rowPadding = new byte[] { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
-        private bool _isLastRegionEnd;
         public Scanner(IStandardClient client, ScanCall rpc)
         {
             _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<Scanner>() ?? new DebugLogger<Scanner>();
@@ -58,7 +58,8 @@ namespace HBaseNet
                     Filters = _rpc.Filters,
                     TimeRange = _rpc.TimeRange,
                     MaxVersions = _rpc.MaxVersions,
-                    NumberOfRows = _rpc.NumberOfRows
+                    NumberOfRows = _rpc.NumberOfRows,
+                    Reversed = _rpc.Reversed
                 };
             }
             else
@@ -114,13 +115,13 @@ namespace HBaseNet
         private async Task<List<Result>> Fetch()
         {
             _results = new List<Result>();
-            while (false == CancellationToken.IsCancellationRequested && false == _isLastRegionEnd)
+            while (false == CancellationToken.IsCancellationRequested && false == _closed)
             {
                 var (resp, region) = await Request();
                 if (null == resp || null == region)
                 {
                     await Close();
-                    return null;
+                    return _results;
                 }
                 _results.AddRange(resp.Results);
                 await Update(resp, region);
@@ -128,13 +129,9 @@ namespace HBaseNet
                 {
                     await Close();
                 }
-                if (true != region.StopKey.Any() && false == resp.MoreResultsInRegion)
-                {
-                    _isLastRegionEnd = true;
-                }
-                return _results.Any() ? _results : null;
+                return _results;
             }
-            return null;
+            return _results;
         }
         private async Task<Result> Peek()
         {
@@ -209,6 +206,7 @@ namespace HBaseNet
                     ScannerID = _scannerID,
                     NumberOfRows = 0
                 };
+                _logger.LogDebug($"Scanner close region:{_rpc.Info}");
                 await _client.SendRPCToRegion<ScanResponse>(rpc, CancellationToken);
             }
             _scannerID = null;
@@ -216,14 +214,15 @@ namespace HBaseNet
 
         public void Dispose()
         {
-
+            CanContinueNext = false;
         }
 
         public async Task Close()
         {
+            CanContinueNext = false;
             if (_closed)
             {
-                _logger.LogWarning("scanner has already been closed");
+                _logger.LogWarning($"Scanner has already been closed. region:{_rpc.Info}");
                 return;
             }
             _closed = true;
