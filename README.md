@@ -11,7 +11,7 @@ HBase >= 1.0
 ### Create a client
 
 ```csharp
-var ZkQuorum = "hbase-host-ip";
+var ZkQuorum = "zooKeep-host-ip";
 var admin = await new AdminClient(ZkQuorum).Build();
 if (admin == null) return;
 var client = await new StandardClient(ZkQuorum).Build();
