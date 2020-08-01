@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using System.Linq;
 using CSharpTest.Net.Collections;
+using HBaseNet.Logging;
+using Microsoft.Extensions.Logging;
 
 namespace HBaseNet.Region
 {
@@ -8,9 +10,10 @@ namespace HBaseNet.Region
     {
         private BTreeDictionary<byte[], RegionInfo> KeyInfoCache { get; }
         private List<RegionClient> ClientCache { get; }
-
+        private readonly ILogger<RegionCache> _logger;
         public RegionCache()
         {
+            _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<RegionCache>() ?? new DebugLogger<RegionCache>();
             KeyInfoCache = new BTreeDictionary<byte[], RegionInfo>(new RegionNameComparer());
             ClientCache = new List<RegionClient>();
         }
@@ -73,6 +76,7 @@ namespace HBaseNet.Region
             foreach (var c in cs)
             {
                 ClientCache.Remove(c);
+                _logger.LogInformation($"Removed region client({c.Type}-{c.Host}:{c.Port})  from cache.");
             }
         }
 
@@ -81,6 +85,7 @@ namespace HBaseNet.Region
             foreach (var c in rs)
             {
                 KeyInfoCache.Remove(c.Name);
+                _logger.LogInformation($"Removed region info({c})  from cache.");
             }
         }
 

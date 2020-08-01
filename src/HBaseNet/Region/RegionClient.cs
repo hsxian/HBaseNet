@@ -24,7 +24,7 @@ namespace HBaseNet.Region
         private int _callId;
         public string Host { get; }
         public ushort Port { get; }
-        private RegionType Type { get; }
+        public RegionType Type { get; }
         private Socket _socket;
         private readonly ILogger<RegionClient> _logger;
         private ConcurrentDictionary<uint, RPCResult> _idResultDict;
@@ -34,7 +34,7 @@ namespace HBaseNet.Region
         public int CallQueueSize { get; set; } = 150;
         public string EffectiveUser { get; set; } = ConstString.DefaultEffectiveUser;
         private CancellationTokenSource _defaultCancellationSource;
-
+        public bool IsInvalid { get; set; }
         public RegionClient(string host, ushort port, RegionType type)
         {
             _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<RegionClient>() ?? new DebugLogger<RegionClient>();
@@ -69,8 +69,7 @@ namespace HBaseNet.Region
                 }
                 catch (Exception e)
                 {
-                    _logger.LogWarning(
-                        $"Connect RegionServer({Host}:{Port}) failed in {i + 1}th，try the locate again after {backoff}.\n{e}");
+                    _logger.LogWarning($"Connect RegionServer({Host}:{Port}) failed in {i + 1}th，try the locate again after {backoff}.\n{e}");
                     backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, TimeSpan.FromSeconds(5), token);
                 }
             }
@@ -85,19 +84,7 @@ namespace HBaseNet.Region
             if (false == await SendHello(Type)) return null;
             ProcessRPCs();
             ReceiveRPCs();
-            ProcessOtherSituation();
             return this;
-        }
-
-        private void ProcessOtherSituation()
-        {
-            Task.Factory.StartNew(async () =>
-            {
-                while (_defaultCancellationSource.IsCancellationRequested == false)
-                {
-                    await Task.Delay(1000);
-                }
-            }, TaskCreationOptions.LongRunning);
         }
         public async Task QueueRPC(ICall rpc)
         {
@@ -172,8 +159,7 @@ namespace HBaseNet.Region
                         result = new RPCResult
                         {
                             CallId = callId,
-                            Error = new TimeoutException(
-                                $"RPC ({rpc.RPC.Name}) waiting time out({TimeOut} milliseconds),the client will no longer wait.")
+                            Error = new TimeoutException($"RPC ({rpc.RPC.Name}) waiting time out({TimeOut} milliseconds),the client will no longer wait.")
                         };
                         _logger.LogError(result.Error.Message);
                         break;
@@ -182,7 +168,6 @@ namespace HBaseNet.Region
 
                 await Task.Delay(1);
             } while (_defaultCancellationSource.IsCancellationRequested == false);
-
             return result;
         }
 
@@ -218,7 +203,7 @@ namespace HBaseNet.Region
             }
             catch (Exception e) when (e is IOException)
             {
-                _logger.LogError(e, $"error when write to rpc conn");
+                _logger.LogError(e, $"Error when write to rpc conn");
                 return false;
             }
 
@@ -248,7 +233,7 @@ namespace HBaseNet.Region
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"error when read fully from rpc conn");
+                _logger.LogError(e, $"Error when read fully from rpc conn");
                 return e;
             }
 
@@ -311,9 +296,9 @@ namespace HBaseNet.Region
 
             if (resp.CallId == 0)
             {
-                const string msg = "Response doesn't have a call ID!";
-                _logger.LogError(msg);
-                result.Error = new Exception(msg);
+                result.Error = new Exception("Response doesn't have a call ID");
+                _logger.LogError(result.Error.Message);
+                Dispose();
                 return result;
             }
 
@@ -352,14 +337,12 @@ namespace HBaseNet.Region
 
         private void ProcessRPCResultException(ICall rpc, RPCResult result, ExceptionResponse exception)
         {
-            var errStr =
-                $"HBase java exception: {exception.ExceptionClassName}:{exception.StackTrace}";
+            var errStr = $"HBase java exception: {exception.ExceptionClassName}:{exception.StackTrace}";
 
             if (ExceptionMap.IsMatch<CallQueueTooBigException>(exception.ExceptionClassName))
             {
                 result.Error = new CallQueueTooBigException();
-                _logger.LogWarning(
-                    $"{errStr}.\n\tThe rpc will be retried {rpc.RetryCount + 1}th, and you can reduce the {nameof(CallQueueSize)} configuration to reduce the exception.");
+                _logger.LogWarning($"{errStr}.\n\tThe rpc will be retried {rpc.RetryCount + 1}th, and you can reduce the {nameof(CallQueueSize)} configuration to reduce the exception.");
             }
             else if (ExceptionMap.IsMatch<RetryableException>(exception.ExceptionClassName))
             {
@@ -380,6 +363,7 @@ namespace HBaseNet.Region
         public void Dispose()
         {
             _defaultCancellationSource.Cancel();
+            IsInvalid = true;
         }
     }
 }

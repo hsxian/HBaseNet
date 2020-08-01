@@ -144,6 +144,11 @@ namespace HBaseNet
             var oldTime = DateTime.Now;
             reg = GetInfoFromCache(rpc.Table, rpc.Key);
             client = reg?.Client;
+            if (true == client?.IsInvalid)
+            {
+                _cache.ClientDown(reg);
+                client = null;
+            }
             if (client == null)
             {
                 _loadRegionQueue.Enqueue(rpc);
@@ -171,11 +176,17 @@ namespace HBaseNet
                 var client = await QueueRPC(rpc, token.Value);
                 if (client == null)
                 {
-                    _logger.LogError("queue rpc return none client.");
+                    _logger.LogError("Queue rpc return none client.");
                     return null;
                 }
 
                 var result = await client.GetRPCResult(rpc.CallId);
+                if (result == null)
+                {
+                    _cache.ClientDown(rpc.Info);
+                    _logger.LogError($"Get remote rpc(name:{rpc.Name},table:{rpc.Table?.ToUtf8String()},key:{rpc.Key?.ToUtf8String()}) result error.");
+                    return null;
+                }
                 if (result.Msg is TResponse res)
                 {
                     return res;
