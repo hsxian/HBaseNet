@@ -19,6 +19,10 @@ namespace HBaseNet.HRpc
             Columns = columns;
         }
 
+        public CreateTableCall(string table, IEnumerable<ColumnFamily> columns) : this(table.ToUtf8Bytes(), columns)
+        {
+        }
+
         public override byte[] Serialize()
         {
             var cTable = new Pb.CreateTableRequest

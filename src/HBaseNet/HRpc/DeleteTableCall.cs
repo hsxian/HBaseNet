@@ -13,6 +13,10 @@ namespace HBaseNet.HRpc
             Table = table;
         }
 
+        public DeleteTableCall(string table) : this(table.ToUtf8Bytes())
+        {
+        }
+
         public override byte[] Serialize()
         {
             var dTable = new Pb.DeleteTableRequest

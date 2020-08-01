@@ -13,6 +13,10 @@ namespace HBaseNet.HRpc
             Table = table;
         }
 
+        public EnableTableCall(string table) : this(table.ToUtf8Bytes())
+        {
+        }
+
         public override byte[] Serialize()
         {
             var eTable = new Pb.EnableTableRequest()

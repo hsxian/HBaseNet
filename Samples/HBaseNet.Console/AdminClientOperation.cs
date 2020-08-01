@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
 using HBaseNet.HRpc.Descriptors;
-using HBaseNet.Utility;
 using Serilog;
 
 namespace HBaseNet.Console
@@ -18,7 +17,7 @@ namespace HBaseNet.Console
 
         public async Task ExecAll()
         {
-            var table = DateTime.Now.ToString("yyyyMMddHHmmss").ToUtf8Bytes();
+            var table = DateTime.Now.ToString("yyyyMMddHHmmss");
             var cols = new[]
             {
                 new ColumnFamily("info")
@@ -41,11 +40,11 @@ namespace HBaseNet.Console
             var delete = new DeleteTableCall(table);
 
             var ct = await _admin.CreateTable(create);
-            Log.Logger.Information($"Create table: {table.ToUtf8String()},result:{ct}");
+            Log.Logger.Information($"Create table: {table},result:{ct}");
             var dt = await _admin.DisableTable(disable);
-            Log.Logger.Information($"Disable table: {table.ToUtf8String()},result:{dt}");
+            Log.Logger.Information($"Disable table: {table},result:{dt}");
             var del = await _admin.DeleteTable(delete);
-            Log.Logger.Information($"Delete table: {table.ToUtf8String()},result:{del}");
+            Log.Logger.Information($"Delete table: {table},result:{del}");
         }
     }
 }

@@ -21,17 +21,17 @@ namespace HBaseNet.HRpc
         public TimeRange TimeRange { get; set; }
         public uint MaxVersions { get; set; } = 1;
 
-        public GetCall(string table, string key)
-        {
-            Table = table.ToUtf8Bytes();
-            Key = key.ToUtf8Bytes();
-        }
+
 
         public GetCall(byte[] table, byte[] key, bool isClosestBefore = false)
         {
             IsClosestBefore = isClosestBefore;
             Table = table;
             Key = key;
+        }
+
+        public GetCall(string table, string key) : this(table.ToUtf8Bytes(), key.ToUtf8Bytes())
+        {
         }
 
         public override string Name => "Get";

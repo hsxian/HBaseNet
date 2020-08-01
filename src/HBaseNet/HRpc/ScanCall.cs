@@ -20,7 +20,7 @@ namespace HBaseNet.HRpc
         public bool AllowPartialResults { get; set; }
         public bool Reversed { get; set; }
 
-        public ScanCall(string table, byte[] startRow, byte[] stopRow) : this(table.ToUtf8Bytes(), startRow, stopRow)
+        public ScanCall(string table, string startRow, string stopRow) : this(table.ToUtf8Bytes(), startRow?.ToUtf8Bytes(), stopRow?.ToUtf8Bytes())
         {
         }
 

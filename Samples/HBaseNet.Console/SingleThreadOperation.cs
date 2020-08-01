@@ -1,5 +1,3 @@
-using System;
-using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -32,7 +30,7 @@ namespace HBaseNet.Console
 
         public async Task ExecScan()
         {
-            var sc = new ScanCall(Program.Table, "".ToUtf8Bytes(), "g".ToUtf8Bytes())
+            var sc = new ScanCall(Program.Table, "", "g")
             {
                 // Families = Program.Family,
                 // TimeRange = new TimeRange
@@ -55,7 +53,7 @@ namespace HBaseNet.Console
 
         public async Task ExecScanAndDelete()
         {
-            using var scanner = _client.Scan(new ScanCall(Program.Table, "".ToUtf8Bytes(), "g".ToUtf8Bytes()) { NumberOfRows = 3 });
+            using var scanner = _client.Scan(new ScanCall(Program.Table, "", "g") { NumberOfRows = 3 });
             var scanResults = await scanner.Next();
             if (null == scanResults) return;
             Log.Information($"scan result count:{scanResults.Count}");
