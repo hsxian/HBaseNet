@@ -21,7 +21,7 @@ if (client == null) return;
 ### Admin operation
 
 ```csharp
-var table = "student".ToUtf8Bytes();
+var table = "student";
 var cols = new[]
 {
     new ColumnFamily("info")
@@ -72,7 +72,7 @@ var values = new Dictionary<string, IDictionary<string,byte[]>>
 var rs = await client.Put(new MutateCall(table, rowKey, values));
 
 // scan
-var sc = new ScanCall(Program.Table, "1".ToUtf8Bytes(), "".ToUtf8Bytes())
+var sc = new ScanCall(Program.Table, "1", "")
 {
     NumberOfRows = 100000
 };
