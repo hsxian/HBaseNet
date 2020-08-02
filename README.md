@@ -1,5 +1,7 @@
 # HBaseNet
 
+[![NuGet Badge](https://buildstats.info/nuget/hbasenet)](https://www.nuget.org/packages/HBaseNet)
+
 This is a pure CSharp client for HBase.
 
 ## Supported Versions
