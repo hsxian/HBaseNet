@@ -74,18 +74,18 @@ var values = new Dictionary<string, IDictionary<string,byte[]>>
 var rs = await client.Put(new MutateCall(table, rowKey, values));
 
 // scan
-var sc = new ScanCall(Program.Table, "1", "")
+var sc = new ScanCall(table, "1", "")
 {
     NumberOfRows = 100000
 };
 using var scanner = _client.Scan(sc);
 var scanResults = new List<Result>();
-do
+while (scanner.CanContinueNext)
 {
     var per = await scanner.Next();
-    if (true != per?.Any()) break;
+    if (true != per?.Any()) continue;
     scanResults.AddRange(per);
-} while (scanResults.Count < 100);
+}
 
 // get
 var getResult = await client.Get(new GetCall(table, rowKey));
