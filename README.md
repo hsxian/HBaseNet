@@ -78,7 +78,7 @@ var sc = new ScanCall(table, "1", "")
 {
     NumberOfRows = 100000
 };
-using var scanner = _client.Scan(sc);
+using var scanner = client.Scan(sc);
 var scanResults = new List<Result>();
 while (scanner.CanContinueNext)
 {
