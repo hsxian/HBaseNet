@@ -10,16 +10,16 @@ namespace HBaseNet.HRpc
 {
     public class MutateCall : BaseCall
     {
-        public IDictionary<string, IDictionary<string, byte[]>> Values { get; }
+        public IDictionary<string, Dictionary<string, byte[]>> Values { get; }
         public DateTime? Timestamp { get; set; }
         public MutationProto.Types.Durability Durability { get; set; } = MutationProto.Types.Durability.UseDefault;
         public MutationProto.Types.MutationType MutationType { get; set; }
 
-        public MutateCall(string table, string key, IDictionary<string, IDictionary<string, byte[]>> values)
+        public MutateCall(string table, string key, IDictionary<string, Dictionary<string, byte[]>> values)
             : this(table.ToUtf8Bytes(), key.ToUtf8Bytes(), values)
         {
         }
-        public MutateCall(byte[] table, byte[] key, IDictionary<string, IDictionary<string, byte[]>> values)
+        public MutateCall(byte[] table, byte[] key, IDictionary<string, Dictionary<string, byte[]>> values)
         {
             Table = table;
             Key = key;
@@ -29,7 +29,7 @@ namespace HBaseNet.HRpc
         {
             Table = table;
             Key = key;
-            Values = new Dictionary<string, IDictionary<string, byte[]>>
+            Values = new Dictionary<string, Dictionary<string, byte[]>>
             {
                 {family,  new Dictionary<string ,byte[]> {{qualifier,EndianBitConverter.BigEndian.GetBytes(increment)}}}
             };
@@ -42,7 +42,7 @@ namespace HBaseNet.HRpc
         {
             Table = table;
             Key = key;
-            Values = new Dictionary<string, IDictionary<string, byte[]>>
+            Values = new Dictionary<string, Dictionary<string, byte[]>>
             {
                 {family,  new Dictionary<string ,byte[]> {{qualifier,append.ToUtf8Bytes()}}}
             };

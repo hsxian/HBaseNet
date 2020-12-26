@@ -2,6 +2,10 @@
 using System.Diagnostics;
 using System.Linq;
 using System.Threading.Tasks;
+using Bogus;
+using Bogus.Extensions;
+using HBaseNet.Console.Models;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.HRpc.Descriptors;
 using HBaseNet.Utility;
@@ -16,12 +20,14 @@ namespace HBaseNet.Console
     {
         private const string ZkQuorum = "hbase-docker";
         public const string Table = "student";
-        public static Dictionary<string, string[]> Family;
-        public static Dictionary<string, IDictionary<string, byte[]>> Values;
+        public static Dictionary<string, Dictionary<string, byte[]>> Values;
+        public static Faker<Student> StudentFaker;
+
         public static string GenerateRandomKey()
         {
             return Guid.NewGuid().ToString();
         }
+
         static async Task Main(string[] args)
         {
             Log.Logger = new LoggerConfiguration()
@@ -34,15 +40,21 @@ namespace HBaseNet.Console
             HBaseConfig.Instance.ServiceProvider = new ServiceCollection()
                 .AddLogging(cfg => cfg.AddSerilog(Log.Logger))
                 .BuildServiceProvider();
-
-            Family = new Dictionary<string, string[]>
-            {
-                {"default", new[] {"key"}}
-            };
-            Values = new Dictionary<string, IDictionary<string, byte[]>>
+   
+            StudentFaker = new Faker<Student>()
+                    .StrictMode(true)
+                    .RuleFor(t => t.Name, f => f.Name.FindName())
+                    .RuleFor(t => t.Address, f => f.Address.FullAddress())
+                    .RuleFor(t => t.Age, f => f.Random.Int(1, 100))
+                    .RuleFor(t => t.Create, f => f.Date.Recent())
+                    .RuleFor(t => t.Modify, f => f.Date.Soon())
+                    .RuleFor(t => t.Score, f => f.Random.Float(0, 5))
+                    .RuleFor(t => t.Courses, f =>Enumerable.Range(0,f.Random.Int(0,10)).Select(i=>f.Company.CompanyName()).ToList())
+                ;
+            Values = new Dictionary<string, Dictionary<string, byte[]>>
             {
                 {
-                    "default", new Dictionary<string, byte[]>
+                    ConstString.DefaultFamily, new Dictionary<string, byte[]>
                     {
                         {"key", "value".ToUtf8Bytes()}
                     }
@@ -59,12 +71,13 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
 
-            var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily("default"), })
+            var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {new ColumnFamily(ConstString.DefaultFamily),})
             {
-                SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}").ToArray()
+                SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char) t}")
+                    .ToArray()
             };
 
-            var tables = await admin.ListTableNames(new ListTableNamesCall { Regex = Table });
+            var tables = await admin.ListTableNames(new ListTableNamesCall {Regex = Table});
             if (true != tables?.Any())
             {
                 await admin.CreateTable(create);

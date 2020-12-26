@@ -10,5 +10,6 @@ namespace HBaseNet.Const
         public const string Master = "/master";
         public const string MetaRegion = "/meta-region-server";
         public const string DefaultEffectiveUser = "root";
+        public const string DefaultFamily = "info";
     }
 }

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using HBaseNet.HRpc;
+using HBaseNet.Metadata.Conventions;
 using Pb;
 
 namespace HBaseNet.Console
@@ -21,7 +22,9 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = Program.GenerateRandomKey();
-                var rs = _client.Put(new MutateCall(Program.Table, rowKey, Program.Values)
+                var student = Program.StudentFaker.Generate();
+                var values = HBaseConvert.Instance.ConvertToDictionary(student);
+                var rs = _client.Put(new MutateCall(Program.Table, rowKey, values)
                 {
                     Timestamp = new DateTime(2019, 1, 1, 1, 1, 1),
                 });

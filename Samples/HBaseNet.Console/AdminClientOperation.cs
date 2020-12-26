@@ -1,5 +1,6 @@
 using System;
 using System.Threading.Tasks;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
 using HBaseNet.HRpc.Descriptors;
 using Serilog;
@@ -20,7 +21,7 @@ namespace HBaseNet.Console
             var table = DateTime.Now.ToString("yyyyMMddHHmmss");
             var cols = new[]
             {
-                new ColumnFamily("info")
+                new ColumnFamily(ConstByte.DefaultFamily)
                 {
                     Compression = Compression.GZ,
                     KeepDeletedCells = KeepDeletedCells.TRUE

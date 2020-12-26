@@ -10,6 +10,7 @@
     </ItemGroup>
 
     <ItemGroup>
+      <PackageReference Include="Bogus" Version="32.0.2" />
       <PackageReference Include="EndianBitConverter" Version="1.1.0" />
       <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.6" />
       <PackageReference Include="Serilog" Version="2.10.0-dev-01191" />

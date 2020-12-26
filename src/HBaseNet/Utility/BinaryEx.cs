@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System;
 using System.Linq;
 using System.Text;
+using System.Collections.Generic;
 
 namespace HBaseNet.Utility
 {
@@ -39,6 +40,11 @@ namespace HBaseNet.Utility
         public static string ToUtf8String(this byte[] arr)
         {
             return Encoding.UTF8.GetString(arr);
+        }
+
+        public static int GetBinaryHashCode(this IEnumerable<byte> arr)
+        {
+            return arr?.Any() != true ? 0 : arr.Aggregate(17, (current, @by) => current << 31 + @by);
         }
     }
 }

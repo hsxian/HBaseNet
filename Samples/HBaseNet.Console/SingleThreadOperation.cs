@@ -1,9 +1,15 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using BitConverter;
+using Bogus;
+using Bogus.Extensions;
+using HBaseNet.Console.Models;
+using HBaseNet.Const;
 using HBaseNet.HRpc;
+using HBaseNet.Metadata.Conventions;
 using HBaseNet.Utility;
 using Pb;
 using Serilog;
@@ -17,6 +23,7 @@ namespace HBaseNet.Console
         public SingleThreadOperation(IStandardClient client)
         {
             _client = client;
+            Randomizer.Seed = new Random(DateTime.Now.Millisecond);
         }
 
         public async Task ExecPut(int count)
@@ -24,7 +31,9 @@ namespace HBaseNet.Console
             for (var i = 0; i < count; i++)
             {
                 var rowKey = Program.GenerateRandomKey();
-                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
+                var student = Program.StudentFaker.Generate();
+                var values = HBaseConvert.Instance.ConvertToDictionary(student);
+                var rs = await _client.Put(new MutateCall(Program.Table, rowKey, values));
             }
         }
 
@@ -41,13 +50,15 @@ namespace HBaseNet.Console
                 NumberOfRows = 100000,
             };
             using var scanner = _client.Scan(sc);
-            var scanResults = new List<Result>();
+            var scanResults = new List<Student>();
             while (scanner.CanContinueNext)
             {
                 var per = await scanner.Next();
                 if (true != per?.Any()) continue;
-                scanResults.AddRange(per);
+                var stus = HBaseConvert.Instance.ConvertToCustom<Student>(per);
+                scanResults.AddRange(stus);
             }
+
             Log.Information($"scan result count:{scanResults.Count}");
         }
 
@@ -59,19 +70,21 @@ namespace HBaseNet.Console
             Log.Information($"scan result count:{scanResults.Count}");
             foreach (var result in scanResults)
             {
-                var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).Single();
+                var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).FirstOrDefault();
+                if (rowKey == null) continue;
                 var delResult = await _client.Delete(new MutateCall(Program.Table, rowKey, null));
                 Log.Logger.Information($"delete row at key: {rowKey}, processed:{delResult.Processed}");
             }
         }
+
         public async Task ExecAppend()
         {
             var rowKey = Program.GenerateRandomKey();
             var rs = await _client.Put(new MutateCall(Program.Table, rowKey, Program.Values));
-            var v = new Dictionary<string, IDictionary<string, byte[]>>
+            var v = new Dictionary<string, Dictionary<string, byte[]>>
             {
                 {
-                    "default", new Dictionary<string, byte[]>
+                    ConstString.DefaultFamily, new Dictionary<string, byte[]>
                     {
                         {"key", " append".ToUtf8Bytes()}
                     }
@@ -79,7 +92,7 @@ namespace HBaseNet.Console
             };
             rs = await _client.Append(new MutateCall(Program.Table, rowKey, v));
             var upRs = await _client.Get(new GetCall(Program.Table, rowKey));
-            rs = await _client.Append(new MutateCall(Program.Table, rowKey, "default", "key", " append"));
+            rs = await _client.Append(new MutateCall(Program.Table, rowKey, ConstString.DefaultFamily, "key", " append"));
             upRs = await _client.Get(new GetCall(Program.Table, rowKey));
             var newV = upRs.Result.Cell[0].Value.ToStringUtf8();
             if ("value append append" == newV)
@@ -91,21 +104,22 @@ namespace HBaseNet.Console
                 Log.Information($"append at key:{rowKey} ,failed");
             }
         }
+
         public async Task ExecIncrement()
         {
             var rowKey = Program.GenerateRandomKey();
-            var v = new Dictionary<string, IDictionary<string, byte[]>>
+            var v = new Dictionary<string, Dictionary<string, byte[]>>
             {
                 {
-                    "default", new Dictionary<string, byte[]>
+                    ConstString.DefaultFamily, new Dictionary<string, byte[]>
                     {
-                        {"key",null}
+                        {"key", null}
                     }
                 }
             };
-            v["default"]["key"] = EndianBitConverter.BigEndian.GetBytes(1L);
+            v[ConstString.DefaultFamily]["key"] = EndianBitConverter.BigEndian.GetBytes(1L);
             var rs = await _client.Increment(new MutateCall(Program.Table, rowKey, v));
-            rs = await _client.Increment(new MutateCall(Program.Table, rowKey, "default", "key", 5L));
+            rs = await _client.Increment(new MutateCall(Program.Table, rowKey, ConstString.DefaultFamily, "key", 5L));
             if (6 == rs)
             {
                 Log.Information($"increment at key:{rowKey} ,success");
@@ -115,13 +129,14 @@ namespace HBaseNet.Console
                 Log.Information($"increment at key:{rowKey} ,failed");
             }
         }
+
         public async Task ExecCheckAndPut()
         {
             var rowKey = Program.GenerateRandomKey();
             var put = new MutateCall(Program.Table, rowKey, Program.Values);
-            var result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
+            var result = await _client.CheckAndPut(put, ConstString.DefaultFamily, "key", null, new CancellationToken());
             Log.Information($"check and put key:{rowKey},result:{result}");
-            result = await _client.CheckAndPut(put, "default", "key", null, new CancellationToken());
+            result = await _client.CheckAndPut(put, ConstString.DefaultFamily, "key", null, new CancellationToken());
             Log.Information($"check and put key:{rowKey} again,result:{result}");
         }
     }

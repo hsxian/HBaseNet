@@ -14,5 +14,6 @@ namespace HBaseNet.Const
         public const byte Colon = (byte)':';
         public const byte P = (byte)'P';
         public static byte[] DefaultNamespace = "default".ToUtf8Bytes();
+        public static byte[] DefaultFamily = ConstString.DefaultFamily.ToUtf8Bytes();
     }
 }
