@@ -79,10 +79,8 @@ namespace HBaseNet.Test.Region
             {
                 var a = RegionInfo.Compare(testcase[0], testcase[1]);
                 var b = RegionInfo.Compare(testcase[1], testcase[0]);
-                Assert.Greater(a, 0,
-                    $"{testcase[0].ToUtf8String()} was found to be less than {testcase[1].ToUtf8String()} {a}");
-                Assert.Less(b, 0,
-                    $"{testcase[1].ToUtf8String()} was found to be less than {testcase[0].ToUtf8String()} {b}");
+                Assert.Greater(a, 0, $"{testcase[0].ToUtf8String()} was found to be less than {testcase[1].ToUtf8String()} {a}");
+                Assert.Less(b, 0, $"{testcase[1].ToUtf8String()} was found to be less than {testcase[0].ToUtf8String()} {b}");
                 var meta = "hbase:meta,,1".ToUtf8Bytes();
                 var i = RegionInfo.Compare(meta, meta);
                 Assert.Zero(i, $"{meta.ToUtf8String()} was found to not be equal to itself({i})");

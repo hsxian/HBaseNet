@@ -1,19 +1,15 @@
 <Project Sdk="Microsoft.NET.Sdk">
-
     <PropertyGroup>
         <TargetFramework>netcoreapp3.1</TargetFramework>
-
         <IsPackable>false</IsPackable>
     </PropertyGroup>
-
     <ItemGroup>
         <PackageReference Include="nunit" Version="3.12.0" />
         <PackageReference Include="NUnit3TestAdapter" Version="3.17.0" />
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="16.6.1" />
+        <PackageReference Include="CSharpTest.Net.Collections-NetStd2" Version="14.906.1403.1084" />
     </ItemGroup>
-
     <ItemGroup>
-      <ProjectReference Include="..\..\src\HBaseNet\HBaseNet.csproj" />
+        <ProjectReference Include="..\..\src\HBaseNet\HBaseNet.csproj" />
     </ItemGroup>
-
 </Project>
