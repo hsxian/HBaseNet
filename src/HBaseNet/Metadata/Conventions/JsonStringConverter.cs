@@ -1,5 +1,4 @@
 using System;
-using BitConverter;
 using HBaseNet.Utility;
 using Newtonsoft.Json;
 

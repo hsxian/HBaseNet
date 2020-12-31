@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,11 +29,12 @@ namespace HBaseNet.Console
 
         public async Task ExecPut(int count)
         {
+            var convertCache = new ConvertCache().BuildCache<Student>(EndianBitConverter.BigEndian);
             for (var i = 0; i < count; i++)
             {
                 var rowKey = Program.GenerateRandomKey();
                 var student = Program.StudentFaker.Generate();
-                var values = HBaseConvert.Instance.ConvertToDictionary(student);
+                var values = HBaseConvert.Instance.ConvertToDictionary(student, convertCache);
                 var rs = await _client.Put(new MutateCall(Program.Table, rowKey, values));
             }
         }
@@ -51,15 +53,21 @@ namespace HBaseNet.Console
             };
             using var scanner = _client.Scan(sc);
             var scanResults = new List<Student>();
+            var sth = Stopwatch.StartNew();
+            var convertCache = new ConvertCache().BuildCache<Student>(EndianBitConverter.BigEndian);
             while (scanner.CanContinueNext)
             {
+                sth.Restart();
                 var per = await scanner.Next();
+                var reqSpan = sth.Elapsed;
                 if (true != per?.Any()) continue;
-                var stus = HBaseConvert.Instance.ConvertToCustom<Student>(per);
+                sth.Restart();
+                var stus = HBaseConvert.Instance.ConvertToCustom<Student>(per, convertCache);
+                Debug.WriteLine($"scanner count:{per.Count}, elapesd: {reqSpan}, convert elapesad: {sth.Elapsed}.");
                 scanResults.AddRange(stus);
             }
 
-            Log.Information($"scan result count:{scanResults.Count}");
+            Log.Information($"scan 'student' count:{scanResults.Count}");
         }
 
         public async Task ExecScanAndDelete()
@@ -67,7 +75,7 @@ namespace HBaseNet.Console
             using var scanner = _client.Scan(new ScanCall(Program.Table, "", "g") { NumberOfRows = 3 });
             var scanResults = await scanner.Next();
             if (null == scanResults) return;
-            Log.Information($"scan result count:{scanResults.Count}");
+            Log.Information($"scan result will delete, count:{scanResults.Count}");
             foreach (var result in scanResults)
             {
                 var rowKey = result.Cell.Select(t => t.Row.ToStringUtf8()).FirstOrDefault();

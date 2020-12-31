@@ -40,16 +40,17 @@ namespace HBaseNet.Console
             HBaseConfig.Instance.ServiceProvider = new ServiceCollection()
                 .AddLogging(cfg => cfg.AddSerilog(Log.Logger))
                 .BuildServiceProvider();
-   
+
             StudentFaker = new Faker<Student>()
                     .StrictMode(true)
                     .RuleFor(t => t.Name, f => f.Name.FindName())
                     .RuleFor(t => t.Address, f => f.Address.FullAddress())
                     .RuleFor(t => t.Age, f => f.Random.Int(1, 100))
                     .RuleFor(t => t.Create, f => f.Date.Recent())
-                    .RuleFor(t => t.Modify, f => f.Date.Soon())
+                    .RuleFor(t => t.Modify, f => f.Date.Soon().OrNull(f))
                     .RuleFor(t => t.Score, f => f.Random.Float(0, 5))
-                    .RuleFor(t => t.Courses, f =>Enumerable.Range(0,f.Random.Int(0,10)).Select(i=>f.Company.CompanyName()).ToList())
+                    .RuleFor(t => t.IsMarried, f => f.Random.Bool().OrNull(f))
+                    .RuleFor(t => t.Courses, f => Enumerable.Range(0, f.Random.Int(0, 10)).Select(i => f.Company.CompanyName()).ToList().OrNull(f))
                 ;
             Values = new Dictionary<string, Dictionary<string, byte[]>>
             {
@@ -71,13 +72,13 @@ namespace HBaseNet.Console
             var sth = new Stopwatch();
             var sto = new SingleThreadOperation(client);
 
-            var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] {new ColumnFamily(ConstString.DefaultFamily),})
+            var create = new CreateTableCall(Table.ToUtf8Bytes(), new[] { new ColumnFamily(ConstString.DefaultFamily), new ColumnFamily("special") })
             {
-                SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char) t}")
+                SplitKeys = Enumerable.Range('1', 9).Concat(Enumerable.Range('a', 6)).Select(t => $"{(char)t}")
                     .ToArray()
             };
 
-            var tables = await admin.ListTableNames(new ListTableNamesCall {Regex = Table});
+            var tables = await admin.ListTableNames(new ListTableNamesCall { Regex = Table });
             if (true != tables?.Any())
             {
                 await admin.CreateTable(create);
