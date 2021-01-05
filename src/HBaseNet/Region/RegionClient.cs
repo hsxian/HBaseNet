@@ -159,7 +159,7 @@ namespace HBaseNet.Region
                         result = new RPCResult
                         {
                             CallId = callId,
-                            Error = new TimeoutException($"RPC ({rpc.RPC.Name}) waiting time out({TimeOut} milliseconds),the client will no longer wait.")
+                            Error = new TimeoutException($"RPC ({rpc.RPC.Name}) waiting time out({TimeOut}),the client will no longer wait.")
                         };
                         _logger.LogError(result.Error.Message);
                         break;

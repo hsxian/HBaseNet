@@ -95,4 +95,53 @@ var delResult = await client.Delete(new MutateCall(table, rowKey, null));
 
 ```
 
+### Use conversion tools
+
+```csharp
+public class Student
+{
+    public string Name { get; set; }
+    public string Address { get; set; }
+    public int Age { get; set; }
+    public float Score { get; set; }
+    public bool? IsMarried { get; set; }
+    [HBaseConverter(typeof(DateTimeUnix13Converter))]
+    public DateTime Create { get; set; }
+    [HBaseProperty(family: "special")]
+    [HBaseConverter(typeof(DateTimeUnix13Converter))]
+    public DateTime? Modify { get; set; }
+    [HBaseConverter(typeof(JsonStringConverter))]
+    public List<string> Courses { get; set; }
+}
+
+
+var convertCache = new ConvertCache().BuildCache<Student>(EndianBitConverter.BigEndian);
+
+var student = new Student
+{
+    Name = "Anna",
+    Age = 20,
+    Address = "Yuxi, China",
+    Score = 99,
+    IsMarried = true,
+    Create = DateTime.Now,
+    Courses = new List<string> { "Mathematics", "physics", "art" }
+};
+
+//object convert to values 
+var values = HBaseConvert.Instance.ConvertToDictionary(student, convertCache);
+  var rs = await client.Put(new MutateCall(Program.Table, rowKey, values));
+
+//scan result convert to object of student
+using var scanner = client.Scan(sc);
+var scanResults = new List<Student>();
+while (scanner.CanContinueNext)
+{
+    var per = await scanner.Next();
+    if (true != per?.Any()) continue;
+    var stus = HBaseConvert.Instance.ConvertToCustom<Student>(per, convertCache);
+    scanResults.AddRange(stus);
+}                   
+```
+
 You can also refer to the "[Samples/HBaseNet.Console](Samples/HBaseNet.Console/Program.cs)" project.
