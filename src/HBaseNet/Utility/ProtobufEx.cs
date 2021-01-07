@@ -14,7 +14,7 @@ namespace HBaseNet.Utility
 
         public static byte[] EncodeVarint(ulong v)
         {
-            return new UInt64Value {Value = v}.ToByteArray()[1..];
+            return new UInt64Value { Value = v }.ToByteArray().Skip(1).ToArray();
         }
 
         /// <summary>

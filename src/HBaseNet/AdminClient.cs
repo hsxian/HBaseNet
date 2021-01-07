@@ -150,5 +150,16 @@ namespace HBaseNet
             _adminClient?.Dispose();
             DefaultCancellationSource.Cancel();
         }
+
+        public async Task<GetClusterStatusResponse> GetClusterStatus(CancellationToken? token = null)
+        {
+            var t = new GetClusterStatusCall();
+            var res = await SendRPC(t, token);
+            if (res?.Msg is GetClusterStatusResponse resp)
+            {
+                return resp;
+            }
+            return null;
+        }
     }
 }

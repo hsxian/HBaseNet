@@ -13,5 +13,6 @@ namespace HBaseNet
         Task<bool> EnableTable(EnableTableCall t, CancellationToken? token = null);
         Task<bool> DisableTable(DisableTableCall t, CancellationToken? token = null);
         Task<TableName[]> ListTableNames(ListTableNamesCall t, CancellationToken? token = null);
+        Task<GetClusterStatusResponse> GetClusterStatus(CancellationToken? token = null);
     }
 }

@@ -260,7 +260,7 @@ namespace HBaseNet.Region
 
             var headerData = reqHeader.ToByteArray();
 
-            var buf = new byte[4 + 1 + headerData.Length + payloadLen.Length + payload.Length];
+            var buf = new byte[4 + 1 + headerData.Length + Math.Max(1, payloadLen.Length) + payload.Length];
             BinaryPrimitives.WriteUInt32BigEndian(buf, (uint)(buf.Length - 4));
             buf[4] = (byte)headerData.Length;
             headerData.CopyTo(buf, 5);

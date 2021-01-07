@@ -40,6 +40,17 @@ namespace HBaseNet.Console
             var disable = new DisableTableCall(table);
             var delete = new DeleteTableCall(table);
 
+            var status = await _admin.GetClusterStatus();
+
+            foreach (var liveServer in status.ClusterStatus.LiveServers)
+            {
+                foreach (var regionLoad in liveServer.ServerLoad.RegionLoads)
+                {
+                    Log.Logger.Information($"RegionSpecifier:{regionLoad.RegionSpecifier.Value.ToStringUtf8()}");
+                }
+            }
+
+
             var ct = await _admin.CreateTable(create);
             Log.Logger.Information($"Create table: {table},result:{ct}");
             var dt = await _admin.DisableTable(disable);
