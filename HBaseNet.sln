@@ -1,6 +1,6 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-#
+# 
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{031DE017-A1C3-449C-AF9B-420E8D008B51}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "HBaseNet", "src\HBaseNet\HBaseNet.csproj", "{5532B6B5-9952-490F-84C5-BE7319760AAF}"

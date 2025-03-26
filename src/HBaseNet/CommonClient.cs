@@ -39,7 +39,7 @@ namespace HBaseNet
                 result = await _zkHelper.LocateResource(zkc, resource, getResultFunc);
                 if (result == null)
                 {
-                    _logger.LogWarning($"Locate {resource} failed in {i + 1}th，try the locate again after {backoff}.");
+                    _logger.LogWarning($"Locate Zookeeper {resource} failed from {ZkQuorum} in {i + 1}th，try the locate again after {backoff}.");
                     backoff = await TaskEx.SleepAndIncreaseBackoff(backoff, BackoffIncrease, token);
                 }
                 else
@@ -51,7 +51,7 @@ namespace HBaseNet
             await zkc.closeAsync();
             if (result == null)
                 _logger.LogWarning(
-                    $"Locate {resource} failed in {RetryCount}th, please check your network.");
+                    $"Locate Zookeeper {resource} failed from {ZkQuorum} in {RetryCount}th, please check your network.");
             return result;
         }
     }
