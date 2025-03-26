@@ -21,7 +21,7 @@ namespace HBaseNet
         public string EffectiveUser { get; set; } = ConstString.DefaultEffectiveUser;
         protected CancellationTokenSource DefaultCancellationSource { get; }
 
-        public string ZkRoot { get; set; } = ConstString.DefaultZkRoot;
+        public string HBaseRoot { get; set; } = ConstString.DefaultHBaseRoot;
         protected CommonClient()
         {
             _logger = HBaseConfig.Instance.LoggerFactory?.CreateLogger<CommonClient>() ?? new DebugLogger<CommonClient>();

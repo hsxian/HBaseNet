@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>netstandard2.1</TargetFramework>
-        <Version>0.1.0</Version>
+        <Version>0.1.1</Version>
         <PackageId>HBaseNet</PackageId>
         <Authors>hsxian</Authors>
         <Product>HBaseNet</Product>
@@ -10,8 +10,10 @@
         <RepositoryUrl>https://github.com/hsxian/HBaseNet</RepositoryUrl>
         <PackageLicenseUrl>https://github.com/hsxian/HBaseNet/blob/master/LICENSE</PackageLicenseUrl>
         <Copyright>Copyright 2020 (c) hsxian. All rights reserved.</Copyright>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
     </PropertyGroup>
     <ItemGroup>
+        <None Include="../../README.md" Pack="true" PackagePath="/" />
         <PackageReference Include="CSharpTest.Net.Collections-NetStd2" Version="14.906.1403.1084" />
         <PackageReference Include="EndianBitConverter" Version="1.1.0" />
         <PackageReference Include="Google.Protobuf" Version="3.12.3" />

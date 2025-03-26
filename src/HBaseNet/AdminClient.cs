@@ -31,7 +31,7 @@ namespace HBaseNet
         private async Task<bool> LocateMasterClient(CancellationToken token)
         {
             if (_adminClient != null) return true;
-            var master = await TryLocateResource(ZkRoot + ConstString.Master, Master.Parser.ParseFrom, token);
+            var master = await TryLocateResource(HBaseRoot + ConstString.Master, Master.Parser.ParseFrom, token);
 
             if (master == null) return false;
 

@@ -249,7 +249,7 @@ namespace HBaseNet
         protected async Task<bool> LocateMetaClient(CancellationToken token)
         {
             if (_metaClient != null) return true;
-            var meta = await TryLocateResource(ZkRoot + ConstString.MetaRegion, MetaRegionServer.Parser.ParseFrom, token);
+            var meta = await TryLocateResource(HBaseRoot + ConstString.MetaRegion, MetaRegionServer.Parser.ParseFrom, token);
 
             if (meta == null) return false;
 
